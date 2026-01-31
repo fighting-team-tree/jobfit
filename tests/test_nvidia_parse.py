@@ -10,6 +10,7 @@ import io
 load_dotenv()
 
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+# NVIDIA NIM의 통합 OpenAI 호환 엔드포인트를 사용합니다.
 API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 def mask_pii(text: str) -> str:
@@ -31,15 +32,14 @@ def encode_image(image_path: str) -> str:
     이미지 파일을 Base64 문자열로 인코딩합니다.
     """
     with Image.open(image_path) as img:
-        # 가이드에 따라 해상도 조정 (1024x1280 ~ 1648x2048)
-        # 여기서는 단순화를 위해 원본을 사용하되, 필요시 resize 로직 추가 가능
+        # PNG 형식으로 변환하여 Base64 인코딩
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 async def test_nemotron_parse(image_path: str):
     """
-    NVIDIA Nemotron-Parse 1.1 API를 테스트합니다.
+    NVIDIA Nemotron-Parse API를 테스트합니다.
     """
     if not NVIDIA_API_KEY:
         print("Error: NVIDIA_API_KEY가 설정되지 않았습니다.")
@@ -49,26 +49,31 @@ async def test_nemotron_parse(image_path: str):
 
     headers = {
         "Authorization": f"Bearer {NVIDIA_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
 
+    # OpenAI 호환 페이로드 구조 (build.nvidia.com 가이드 준수)
+    # Nemotron-Parse 모델은 반드시 tools와 tool_choice를 사용해야 하며, 
+    # content에 HTML 스타일의 <img> 태그를 포함해야 합니다.
     payload = {
-        "model": "nvidia/nemotron-parse-1.1",
+        "model": "nvidia/nemotron-parse",
         "messages": [
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text", 
-                        "text": "Extract strictly in Markdown format preserving all tables. Focus on 'contact', 'education', 'experience', 'projects', and 'skills'."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{base64_image}"}
-                    }
-                ]
+                "content": f'<img src="data:image/png;base64,{base64_image}" />'
             }
         ],
+        "tools": [
+            {
+                "type": "function", 
+                "function": {"name": "markdown_no_bbox"}
+            }
+        ],
+        "tool_choice": {
+            "type": "function", 
+            "function": {"name": "markdown_no_bbox"}
+        },
         "temperature": 0.1,
         "top_p": 0.7,
         "max_tokens": 4096
