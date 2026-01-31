@@ -333,48 +333,79 @@ async def generate_problems(request: GenerateProblemsRequest):
 
 
 @router.get("/problems/{problem_id}")
+async def get_problem_legacy(problem_id: str):
+    """Get a specific problem by ID (legacy endpoint)."""
+    return await get_problem(problem_id)
+
+
+@router.get("/problem/{problem_id}")
 async def get_problem(problem_id: str):
     """Get a specific problem by ID."""
     if problem_id not in problems_store:
         raise HTTPException(status_code=404, detail="Problem not found")
-    
+
     p = problems_store[problem_id]
     return {
         "id": p.id,
         "title": p.title,
         "description": p.description,
         "difficulty": p.difficulty,
-        "problem_type": p.problem_type,
+        "type": p.problem_type,  # Frontend expects 'type' not 'problem_type'
         "skill": p.skill,
         "hints": p.hints,
         "test_cases": p.test_cases,
         "starter_code": p.starter_code,
+        "language": "python",  # Default language
     }
 
 
 @router.post("/problems/{problem_id}/evaluate")
-async def evaluate_solution(problem_id: str, request: EvaluateSolutionRequest):
+async def evaluate_solution_legacy(problem_id: str, request: EvaluateSolutionRequest):
+    """Evaluate a user's solution (legacy endpoint)."""
+    return await evaluate_solution_unified(
+        EvaluateSolutionRequestUnified(problem_id=problem_id, solution=request.user_solution)
+    )
+
+
+class EvaluateSolutionRequestUnified(BaseModel):
+    """Request to evaluate a user's solution (unified)."""
+    problem_id: str
+    solution: str
+
+
+@router.post("/evaluate")
+async def evaluate_solution_unified(request: EvaluateSolutionRequestUnified):
     """
     Evaluate a user's solution using Claude Agent.
-    
+
     Returns detailed feedback and score.
     """
-    if problem_id not in problems_store:
+    if request.problem_id not in problems_store:
         raise HTTPException(status_code=404, detail="Problem not found")
-    
+
     try:
         from app.agents.problem_generator import get_problem_generator
-        
-        problem = problems_store[problem_id]
+
+        problem = problems_store[request.problem_id]
         generator = get_problem_generator()
-        
+
         result = await generator.evaluate_solution(
             problem=problem,
-            user_solution=request.user_solution
+            user_solution=request.solution
         )
-        
-        return result
-        
+
+        # Transform result to match frontend expectations
+        return {
+            "success": result.get("passed", False),
+            "feedback": result.get("feedback", ""),
+            "score": result.get("score", 0),
+            "test_results": {
+                "passed": result.get("tests_passed", 0),
+                "failed": result.get("tests_failed", 0),
+                "details": result.get("details", []),
+            }
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 

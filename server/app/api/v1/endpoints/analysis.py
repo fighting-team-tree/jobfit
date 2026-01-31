@@ -373,6 +373,60 @@ async def analyze_gap(request: GapAnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
 
 
+@router.post("/gap/unified")
+async def analyze_gap_unified(request: GapAnalysisRequest):
+    """
+    Perform unified gap analysis using LangGraph-based agent.
+
+    This endpoint uses a 4-node pipeline:
+    1. analyze_jd - Parse JD with temperature=0
+    2. extract_skills - Extract skills from profile
+    3. match_skills - Embedding-based skill matching
+    4. generate_feedback - Personalized feedback generation
+
+    Returns comprehensive matching analysis with deterministic scoring.
+    """
+    if not request.jd_text or len(request.jd_text.strip()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="JD text too short. Please provide at least 50 characters.",
+        )
+
+    try:
+        from app.agents.unified_matching_agent import get_unified_matching_agent
+
+        agent = get_unified_matching_agent()
+
+        profile_payload = (
+            request.profile.model_dump()
+            if hasattr(request.profile, "model_dump")
+            else request.profile.dict()
+        )
+
+        result = await agent.analyze(profile_payload, request.jd_text)
+
+        return GapAnalysisResponse(
+            match_score=result.match_score,
+            matching_skills=result.matching_skills,
+            missing_skills=result.missing_skills,
+            recommendations=result.recommendations,
+            strengths=result.strengths,
+            areas_to_improve=result.missing_required[:5],
+            jd_analysis=result.jd_analysis,
+            profile_skills=result.profile_skills,
+            matching_required=result.matching_required,
+            missing_required=result.missing_required,
+            matching_preferred=result.matching_preferred,
+            missing_preferred=result.missing_preferred,
+            score_breakdown=result.score_breakdown,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unified gap analysis failed: {str(e)}")
+
+
 @router.post("/jd/url", response_model=JDScrapedResponse)
 async def scrape_jd_from_url(request: JDUrlRequest):
     """
