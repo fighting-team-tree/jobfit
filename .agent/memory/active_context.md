@@ -1,24 +1,21 @@
-# Active Context
-
 ## Current Status
-- **Phase:** Environment Setup Completed / Implementation Started
-- **Goal:** Implementing core AI features (Resume Analysis & Voice Interview).
+- **Phase:** Implementation - NVIDIA Model Testing
+- **Goal:** Testing and verifying NVIDIA NIM (Nemotron-Parse) API for resume parsing.
 
 ## Recent Actions
+- **NVIDIA Model Testing:**
+  - Corrected `tests/test_nvidia_parse.py` payload structure based on official NVIDIA documentation.
+  - Switched to using `tools` (markdown_no_bbox) and `tool_choice` as required by the `nvidia/nemotron-parse` model.
+  - Updated content format to use HTML-like `<img>` tag with base64 data.
+- **Environment Setup:**
+  - Created `.env.example` and `.env` files.
 - **Git & Collaboration:**
-  - Synchronized `dev` branch with `main`.
-  - Propagated updates to all feature branches (`nvidia-parser`, `elevenlabs-voice`, `dashboard-ui`, `gap-analysis`).
-  - Defined Git Commit Convention and Branch Strategy.
+  - Created `test/nvidia-model` branch.
 - **Structure:**
-  - Created Domain-Driven folder structure for Server (`endpoints`, `services`, `schemas`).
-  - Created Feature-Based folder structure for Client (`features`, `hooks`, `store`).
-  - Implemented `server/main.py` with CORS and Basic Router.
-  - Implemented `client/src/App.tsx` with High-Fidelity Dark Mode UI.
-- **Verification:**
-  - Verified Server startup (FastAPI running on port 8000).
-  - Fixed `pyproject.toml` build config issue.
+  - Created `tests/` directory for experimental scripts.
 
 ## Next Steps
-- Implement NVIDIA VLM Resume Parser Service.
-- Implement ElevenLabs WebSocket Interview Service.
-- Connect Frontend Action Cards to actual Routes.
+- Provide or generate a sample resume image/PDF for testing.
+- Run `tests/test_nvidia_parse.py` with the sample file.
+- Verify the quality of Markdown output and PII masking accuracy.
+- Prepare `server/app/services/nvidia_service.py` based on test results.

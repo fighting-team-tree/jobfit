@@ -99,3 +99,7 @@ dist-ssr/
 
 # Replit
 # We keep replit.nix and .replit
+
+# Project Specific
+data/
+parsing_result.md
