@@ -40,7 +40,9 @@ export default function CompaniesPage() {
 
     const fetchCompanies = async () => {
         try {
-            const res = await fetch(`${API_BASE}/companies/`);
+            const res = await fetch(`${API_BASE}/companies/`, {
+                credentials: 'include',
+            });
             if (res.ok) {
                 const data = await res.json();
                 setCompanies(data);
@@ -60,6 +62,7 @@ export default function CompaniesPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newCompanyName }),
+                credentials: 'include',
             });
 
             if (res.ok) {
@@ -76,7 +79,10 @@ export default function CompaniesPage() {
 
     const deleteCompany = async (id: string) => {
         try {
-            await fetch(`${API_BASE}/companies/${id}`, { method: 'DELETE' });
+            await fetch(`${API_BASE}/companies/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
             setCompanies(companies.filter(c => c.id !== id));
             if (selectedCompany?.id === id) {
                 setSelectedCompany(null);
@@ -275,6 +281,7 @@ function CompanyDetail({
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jd_text: jdText, jd_url: jdUrl }),
+                credentials: 'include',
             });
 
             if (res.ok) {
@@ -296,11 +303,13 @@ function CompanyDetail({
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jd_url: jdUrl }),
+                credentials: 'include',
             });
 
             // Then scrape
             const res = await fetch(`${API_BASE}/companies/${company.id}/scrape-jd`, {
                 method: 'POST',
+                credentials: 'include',
             });
 
             if (res.ok) {
@@ -327,6 +336,7 @@ function CompanyDetail({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ profile }),
+                credentials: 'include',
             });
 
             if (res.ok) {

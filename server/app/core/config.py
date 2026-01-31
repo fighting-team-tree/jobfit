@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from pathlib import Path
+import os
 
 # Get the project root directory (.env is at project root)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -9,16 +10,26 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 class Settings(BaseSettings):
     PROJECT_NAME: str = "JobFit"
     API_V1_STR: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://0.0.0.0:5173"]
-    
+
+    # CORS - includes Replit domains
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://0.0.0.0:5173",
+        "https://*.replit.dev",
+        "https://*.repl.co",
+    ]
+
     # AI Keys
     NVIDIA_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
-    
+
     # GitHub API
     GITHUB_TOKEN: str = ""
+
+    # Database (Replit PostgreSQL)
+    DATABASE_URL: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -26,6 +37,16 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore"
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Add Replit domain to CORS if running on Replit
+        replit_slug = os.environ.get("REPL_SLUG")
+        replit_owner = os.environ.get("REPL_OWNER")
+        if replit_slug and replit_owner:
+            replit_domain = f"https://{replit_slug}.{replit_owner}.repl.co"
+            if replit_domain not in self.BACKEND_CORS_ORIGINS:
+                self.BACKEND_CORS_ORIGINS.append(replit_domain)
 
 
 settings = Settings()

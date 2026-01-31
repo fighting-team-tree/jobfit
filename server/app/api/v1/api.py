@@ -1,12 +1,17 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import analysis, interview, roadmap, companies, git
+from app.api.v1.endpoints import analysis, interview, roadmap, companies, git, auth, profile
 
 api_router = APIRouter()
 
 # Register all API routers
 api_router.include_router(
-    analysis.router, 
-    prefix="/analyze", 
+    auth.router,
+    prefix="/auth",
+    tags=["auth"]
+)
+api_router.include_router(
+    analysis.router,
+    prefix="/analyze",
     tags=["analysis"]
 )
 api_router.include_router(
@@ -28,4 +33,9 @@ api_router.include_router(
     git.router,
     prefix="/git",
     tags=["git"]
+)
+api_router.include_router(
+    profile.router,
+    prefix="/profile",
+    tags=["profile"]
 )

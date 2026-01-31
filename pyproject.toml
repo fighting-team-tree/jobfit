@@ -25,6 +25,9 @@ dependencies = [
     "anthropic>=0.40.0",
     # Git Push
     "PyGithub>=2.1.1",
+    # Database (Replit PostgreSQL)
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.29.0",
 ]
 
 [build-system]

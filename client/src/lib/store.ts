@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse } from './api';
+import { profileAPI } from './api';
 
 // ============ Profile Store ============
 
@@ -13,13 +14,17 @@ interface ProfileState {
   resumeFile: File | null;
   githubUrl: string;
   jdText: string;
-  
+
   // Parsed results
   profile: ProfileStructured | null;
   resumeFileResult: ResumeFileResponse | null;
   githubAnalysis: GitHubAnalysisResponse | null;
   gapAnalysis: GapAnalysis | null;
-  
+
+  // Server sync state
+  isServerSyncing: boolean;
+  serverSyncError: string | null;
+
   // Actions
   setResumeText: (text: string) => void;
   setResumeFile: (file: File | null) => void;
@@ -31,6 +36,10 @@ interface ProfileState {
   setGapAnalysis: (analysis: GapAnalysis | null) => void;
   resetProfile: () => void;
   clearAll: () => void;
+
+  // Server sync actions
+  loadFromServer: () => Promise<void>;
+  saveToServer: () => Promise<void>;
 }
 
 const initialProfileState = {
@@ -42,27 +51,115 @@ const initialProfileState = {
   resumeFileResult: null,
   githubAnalysis: null,
   gapAnalysis: null,
+  isServerSyncing: false,
+  serverSyncError: null,
+};
+
+// Debounce utility for auto-save
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+const debouncedSave = (saveFn: () => Promise<void>) => {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+  }
+  saveTimeout = setTimeout(() => {
+    saveFn();
+  }, 1000); // 1 second debounce
 };
 
 export const useProfileStore = create<ProfileState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialProfileState,
-      
+
       setResumeText: (text) => set({ resumeText: text }),
       setResumeFile: (file) => set({ resumeFile: file }),
-      setProfile: (profile) => set({ profile }),
-      setResumeFileResult: (result) => set({ resumeFileResult: result }),
-      setGitHubUrl: (url) => set({ githubUrl: url }),
-      setGitHubAnalysis: (analysis) => set({ githubAnalysis: analysis }),
-      setJdText: (text) => set({ jdText: text }),
-      setGapAnalysis: (analysis) => set({ gapAnalysis: analysis }),
+      setProfile: (profile) => {
+        set({ profile });
+        debouncedSave(() => get().saveToServer());
+      },
+      setResumeFileResult: (result) => {
+        set({ resumeFileResult: result });
+        debouncedSave(() => get().saveToServer());
+      },
+      setGitHubUrl: (url) => {
+        set({ githubUrl: url });
+        debouncedSave(() => get().saveToServer());
+      },
+      setGitHubAnalysis: (analysis) => {
+        set({ githubAnalysis: analysis });
+        debouncedSave(() => get().saveToServer());
+      },
+      setJdText: (text) => {
+        set({ jdText: text });
+        debouncedSave(() => get().saveToServer());
+      },
+      setGapAnalysis: (analysis) => {
+        set({ gapAnalysis: analysis });
+        debouncedSave(() => get().saveToServer());
+      },
       resetProfile: () => set(initialProfileState),
-      clearAll: () => set(initialProfileState),
+      clearAll: () => {
+        if (saveTimeout) {
+          clearTimeout(saveTimeout);
+          saveTimeout = null;
+        }
+        set(initialProfileState);
+      },
+
+      // Load profile from server
+      loadFromServer: async () => {
+        set({ isServerSyncing: true, serverSyncError: null });
+        try {
+          const response = await profileAPI.getMyProfile();
+          set({
+            profile: response.profile_data,
+            resumeFileResult: response.resume_file_result,
+            githubAnalysis: response.github_analysis,
+            gapAnalysis: response.gap_analysis,
+            jdText: response.jd_text || '',
+            githubUrl: response.github_url || '',
+            isServerSyncing: false,
+          });
+        } catch (error) {
+          console.error('Failed to load profile from server:', error);
+          set({
+            isServerSyncing: false,
+            serverSyncError: error instanceof Error ? error.message : 'Failed to load profile',
+          });
+        }
+      },
+
+      // Save profile to server
+      saveToServer: async () => {
+        const state = get();
+        // Skip if no data to save
+        if (!state.profile && !state.resumeFileResult && !state.githubAnalysis && !state.gapAnalysis) {
+          return;
+        }
+
+        set({ isServerSyncing: true, serverSyncError: null });
+        try {
+          await profileAPI.saveMyProfile({
+            profile_data: state.profile,
+            resume_file_result: state.resumeFileResult,
+            github_analysis: state.githubAnalysis,
+            gap_analysis: state.gapAnalysis,
+            jd_text: state.jdText || null,
+            github_url: state.githubUrl || null,
+          });
+          set({ isServerSyncing: false });
+        } catch (error) {
+          console.error('Failed to save profile to server:', error);
+          set({
+            isServerSyncing: false,
+            serverSyncError: error instanceof Error ? error.message : 'Failed to save profile',
+          });
+        }
+      },
     }),
     {
       name: 'jobfit-profile',
-      // Don't persist file objects
+      // Don't persist file objects or sync state
       partialize: (state) => ({
         resumeText: state.resumeText,
         githubUrl: state.githubUrl,

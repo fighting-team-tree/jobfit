@@ -136,6 +136,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
+// Common fetch options with credentials
+const fetchOptions = {
+  credentials: 'include' as RequestCredentials,
+};
+
 export const analysisAPI = {
   /**
    * Analyze resume text
@@ -145,6 +150,7 @@ export const analysisAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resume_text: resumeText }),
+      ...fetchOptions,
     });
     return handleResponse<ResumeAnalysis>(response);
   },
@@ -153,18 +159,19 @@ export const analysisAPI = {
    * Upload and analyze resume file (PDF/image)
    */
   async analyzeResumeFile(
-    file: File, 
+    file: File,
     extractStructured: boolean = true
   ): Promise<ResumeFileResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const url = new URL(`${API_BASE_URL}/analyze/resume/file`);
     url.searchParams.set('extract_structured', String(extractStructured));
-    
+
     const response = await fetch(url.toString(), {
       method: 'POST',
       body: formData,
+      ...fetchOptions,
     });
     return handleResponse<ResumeFileResponse>(response);
   },
@@ -177,6 +184,7 @@ export const analysisAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ profile, jd_text: jdText }),
+      ...fetchOptions,
     });
     return handleResponse<GapAnalysis>(response);
   },
@@ -189,6 +197,7 @@ export const analysisAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ repo_url: repoUrl }),
+      ...fetchOptions,
     });
     return handleResponse<GitHubAnalysisResponse>(response);
   },
@@ -201,6 +210,7 @@ export const analysisAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
+      ...fetchOptions,
     });
     return handleResponse<JDScrapedResponse>(response);
   },
@@ -221,7 +231,7 @@ export const interviewAPI = {
    * Health check
    */
   async healthCheck(): Promise<{ module: string; status: string }> {
-    const response = await fetch(`${API_BASE_URL}/interview/`);
+    const response = await fetch(`${API_BASE_URL}/interview/`, fetchOptions);
     return handleResponse(response);
   },
   /**
@@ -242,6 +252,7 @@ export const interviewAPI = {
         persona,
         max_questions: maxQuestions,
       }),
+      ...fetchOptions,
     });
     return handleResponse<InterviewSession>(response);
   },
@@ -253,6 +264,7 @@ export const interviewAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ answer }),
+      ...fetchOptions,
     });
     return handleResponse<InterviewResponse>(response);
   },
@@ -260,7 +272,7 @@ export const interviewAPI = {
    * Get interview feedback
    */
   async getFeedback(sessionId: string): Promise<InterviewFeedback> {
-    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/feedback`);
+    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/feedback`, fetchOptions);
     return handleResponse<InterviewFeedback>(response);
   },
 };
@@ -335,6 +347,7 @@ export const roadmapAPI = {
         available_hours_per_week: hoursPerWeek,
         weeks,
       }),
+      ...fetchOptions,
     });
     return handleResponse<Roadmap>(response);
   },
@@ -347,6 +360,7 @@ export const roadmapAPI = {
     url.searchParams.set('todo_id', String(todoId));
     const response = await fetch(url.toString(), {
       method: 'POST',
+      ...fetchOptions,
     });
     return handleResponse<RoadmapTodoCompleteResponse>(response);
   },
@@ -358,4 +372,51 @@ export interface RoadmapTodoCompleteResponse {
   todo_id: number;
 }
 
-export default { analysisAPI, interviewAPI, roadmapAPI };
+// ============ Profile Types ============
+
+export interface ProfileSaveRequest {
+  profile_data?: ProfileStructured | null;
+  resume_file_result?: ResumeFileResponse | null;
+  github_analysis?: GitHubAnalysisResponse | null;
+  gap_analysis?: GapAnalysis | null;
+  jd_text?: string | null;
+  github_url?: string | null;
+}
+
+export interface ProfileResponse {
+  user_id: string;
+  profile_data: ProfileStructured | null;
+  resume_file_result: ResumeFileResponse | null;
+  github_analysis: GitHubAnalysisResponse | null;
+  gap_analysis: GapAnalysis | null;
+  jd_text: string | null;
+  github_url: string | null;
+}
+
+export const profileAPI = {
+  /**
+   * Get current user's profile from server
+   */
+  async getMyProfile(): Promise<ProfileResponse> {
+    const response = await fetch(`${API_BASE_URL}/profile/me`, {
+      method: 'GET',
+      ...fetchOptions,
+    });
+    return handleResponse<ProfileResponse>(response);
+  },
+
+  /**
+   * Save current user's profile to server
+   */
+  async saveMyProfile(data: ProfileSaveRequest): Promise<ProfileResponse> {
+    const response = await fetch(`${API_BASE_URL}/profile/me`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      ...fetchOptions,
+    });
+    return handleResponse<ProfileResponse>(response);
+  },
+};
+
+export default { analysisAPI, interviewAPI, roadmapAPI, profileAPI };
