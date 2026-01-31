@@ -34,12 +34,12 @@ function App() {
             <span className="flex w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
             AI 기반 커리어 임팩트 에이전트
           </div>
-          
+
           <h1 className="text-5xl md:text-7xl font-bold mb-8 leading-tight tracking-tight bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
             당신의 커리어 갭,<br />
             데이터로 채우세요.
           </h1>
-          
+
           <p className="text-lg md:text-xl text-neutral-400 mb-12 max-w-2xl mx-auto leading-relaxed">
             NVIDIA VLM이 이력서를 분석하고, ElevenLabs AI가 실시간 면접을 진행합니다.
             막막한 취업 준비, 이제 데이터 기반으로 전략적으로 접근하세요.
@@ -47,7 +47,7 @@ function App() {
 
           {/* Action Cards */}
           <div className="grid md:grid-cols-3 gap-6 text-left">
-            <div className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group cursor-pointer">
+            <Link to="/profile" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Upload className="w-6 h-6 text-blue-400" />
               </div>
@@ -58,9 +58,9 @@ function App() {
               <p className="text-neutral-400 text-sm">
                 PDF 이력서를 업로드하면 AI가 구조를 파악하고 부족한 역량을 진단합니다.
               </p>
-            </div>
+            </Link>
 
-            <div className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group cursor-pointer">
+            <Link to="/interview" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Mic className="w-6 h-6 text-violet-400" />
               </div>
@@ -71,9 +71,9 @@ function App() {
               <p className="text-neutral-400 text-sm">
                 초저지연 음성 AI와 함께 실제 면접 상황을 시뮬레이션하세요.
               </p>
-            </div>
+            </Link>
 
-            <div className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group cursor-pointer">
+            <Link to="/dashboard" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <BookOpen className="w-6 h-6 text-emerald-400" />
               </div>
@@ -84,7 +84,7 @@ function App() {
               <p className="text-neutral-400 text-sm">
                 분석된 갭을 채우기 위한 주차별 학습 계획을 자동으로 생성합니다.
               </p>
-            </div>
+            </Link>
           </div>
         </div>
       </main>
