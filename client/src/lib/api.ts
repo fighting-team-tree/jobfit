@@ -167,10 +167,9 @@ export const analysisAPI = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = new URL(`${API_BASE_URL}/analyze/resume/file`);
-    url.searchParams.set('extract_structured', String(extractStructured));
+    const url = `${API_BASE_URL}/analyze/resume/file?extract_structured=${extractStructured}`;
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
       ...fetchOptions,
@@ -358,9 +357,8 @@ export const roadmapAPI = {
    * Mark a todo as completed
    */
   async completeTodo(todoId: number): Promise<RoadmapTodoCompleteResponse> {
-    const url = new URL(`${API_BASE_URL}/roadmap/todo/complete`);
-    url.searchParams.set('todo_id', String(todoId));
-    const response = await fetch(url.toString(), {
+    const url = `${API_BASE_URL}/roadmap/todo/complete?todo_id=${todoId}`;
+    const response = await fetch(url, {
       method: 'POST',
       ...fetchOptions,
     });
