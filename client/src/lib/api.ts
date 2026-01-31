@@ -1,0 +1,344 @@
+/**
+ * API Client for JobFit Backend
+ */
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+// ============ Types ============
+
+export interface ResumeAnalysis {
+  skills: string[];
+  experience: Array<{
+    company: string;
+    role: string;
+    duration?: string;
+    description?: string;
+  }>;
+  education: Array<{
+    school: string;
+    degree: string;
+    major?: string;
+    year?: string;
+  }>;
+  projects: Array<{
+    name: string;
+    description: string;
+    tech_stack: string[];
+  }>;
+  certifications: string[];
+  raw_text?: string;
+  parse_error?: boolean;
+}
+
+export interface GitHubAnalysisResponse {
+  type: 'user_profile' | 'repository';
+  username?: string;
+  repo?: string;
+  description?: string;
+  stars?: number;
+  total_repos?: number;
+  repos_analyzed?: string[];
+  languages?: Record<string, number>;
+  dependencies?: Record<string, string>;
+  topics?: string[];
+  primary_language?: string;
+  frameworks?: string[];
+  skill_level?: string;
+  skills_identified?: string[];
+  code_patterns?: string[];
+  summary?: string;
+}
+
+export interface ResumeFileResponse {
+  markdown: string;
+  structured: {
+    name?: string;
+    contact?: {
+      email?: string;
+      phone?: string;
+      github?: string;
+      blog?: string;
+    };
+    skills?: string[];
+    experience?: Array<{
+      company: string;
+      role: string;
+      duration?: string;
+      description?: string;
+    }>;
+    education?: Array<{
+      school: string;
+      degree?: string;
+      major?: string;
+      year?: string;
+      gpa?: string;
+    }>;
+    projects?: Array<{
+      name: string;
+      description?: string;
+      tech_stack?: string[];
+      role?: string;
+    }>;
+    certifications?: string[];
+    awards?: string[];
+  } | null;
+  pages: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface GapAnalysis {
+  match_score: number;
+  matching_skills: string[];
+  missing_skills: string[];
+  recommendations: string[];
+  strengths: string[];
+  areas_to_improve: string[];
+}
+
+// ============ API Functions ============
+
+class APIError extends Error {
+  status: number;
+  
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'APIError';
+    this.status = status;
+  }
+}
+
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new APIError(
+      response.status,
+      errorData.detail || `HTTP error: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
+export const analysisAPI = {
+  /**
+   * Analyze resume text
+   */
+  async analyzeResume(resumeText: string): Promise<ResumeAnalysis> {
+    const response = await fetch(`${API_BASE_URL}/analyze/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume_text: resumeText }),
+    });
+    return handleResponse<ResumeAnalysis>(response);
+  },
+
+  /**
+   * Upload and analyze resume file (PDF/image)
+   */
+  async analyzeResumeFile(
+    file: File, 
+    extractStructured: boolean = true
+  ): Promise<ResumeFileResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const url = new URL(`${API_BASE_URL}/analyze/resume/file`);
+    url.searchParams.set('extract_structured', String(extractStructured));
+    
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<ResumeFileResponse>(response);
+  },
+
+  /**
+   * Perform gap analysis between profile and JD
+   */
+  async analyzeGap(profile: object, jdText: string): Promise<GapAnalysis> {
+    const response = await fetch(`${API_BASE_URL}/analyze/gap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile, jd_text: jdText }),
+    });
+    return handleResponse<GapAnalysis>(response);
+  },
+
+  /**
+   * Analyze GitHub repository or profile
+   */
+  async analyzeGitHub(repoUrl: string): Promise<GitHubAnalysisResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_url: repoUrl }),
+    });
+    return handleResponse<GitHubAnalysisResponse>(response);
+  },
+
+  /**
+   * Scrape job description from URL
+   */
+  async scrapeJD(url: string): Promise<JDScrapedResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/jd/url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    return handleResponse<JDScrapedResponse>(response);
+  },
+};
+
+export interface JDScrapedResponse {
+  url: string;
+  title: string;
+  raw_text: string;
+  success: boolean;
+  error?: string;
+  method: 'httpx' | 'playwright';
+}
+
+
+export const interviewAPI = {
+  /**
+   * Health check
+   */
+  async healthCheck(): Promise<{ module: string; status: string }> {
+    const response = await fetch(`${API_BASE_URL}/interview/`);
+    return handleResponse(response);
+  },
+  /**
+   * Start interview session
+   */
+  async startInterview(
+    profile: object,
+    jdText: string,
+    persona: 'professional' | 'friendly' | 'challenging' = 'professional',
+    maxQuestions: number = 5
+  ): Promise<InterviewSession> {
+    const response = await fetch(`${API_BASE_URL}/interview/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile,
+        jd_text: jdText,
+        persona,
+        max_questions: maxQuestions,
+      }),
+    });
+    return handleResponse<InterviewSession>(response);
+  },
+  /**
+   * Respond to current question
+   */
+  async respond(sessionId: string, answer: string): Promise<InterviewResponse> {
+    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer }),
+    });
+    return handleResponse<InterviewResponse>(response);
+  },
+  /**
+   * Get interview feedback
+   */
+  async getFeedback(sessionId: string): Promise<InterviewFeedback> {
+    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/feedback`);
+    return handleResponse<InterviewFeedback>(response);
+  },
+};
+
+export interface InterviewSession {
+  session_id: string;
+  question: string;
+  question_number: number;
+  total_questions: number;
+  persona: string;
+}
+
+export interface InterviewResponse {
+  session_id: string;
+  status: 'in_progress' | 'completed';
+  message?: string;
+  question?: string;
+  question_number?: number;
+  total_questions?: number;
+}
+
+export interface InterviewFeedback {
+  session_id: string;
+  total_questions: number;
+  duration_seconds: number;
+  conversation: Array<{ role: string; content: string; timestamp: string }>;
+  feedback_summary: string;
+  scores: Record<string, number>;
+}
+
+// ============ Roadmap Types ============
+
+export interface TodoItem {
+  id: number;
+  task: string;
+  skill: string;
+  priority: 'high' | 'medium' | 'low';
+  estimated_hours: number;
+  resources: string[];
+  completed: boolean;
+}
+
+export interface WeeklyPlan {
+  week_number: number;
+  theme: string;
+  goals: string[];
+  total_hours: number;
+  todos: TodoItem[];
+}
+
+export interface Roadmap {
+  title: string;
+  summary: string;
+  total_estimated_hours: number;
+  weekly_plans: WeeklyPlan[];
+}
+
+export const roadmapAPI = {
+  /**
+   * Generate learning roadmap from gap analysis
+   */
+  async generate(
+    gapAnalysis: GapAnalysis,
+    hoursPerWeek: number = 10,
+    weeks: number = 4
+  ): Promise<Roadmap> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gap_analysis: gapAnalysis,
+        available_hours_per_week: hoursPerWeek,
+        weeks,
+      }),
+    });
+    return handleResponse<Roadmap>(response);
+  },
+
+  /**
+   * Mark a todo as completed
+   */
+  async completeTodo(todoId: number): Promise<RoadmapTodoCompleteResponse> {
+    const url = new URL(`${API_BASE_URL}/roadmap/todo/complete`);
+    url.searchParams.set('todo_id', String(todoId));
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+    });
+    return handleResponse<RoadmapTodoCompleteResponse>(response);
+  },
+};
+
+export interface RoadmapTodoCompleteResponse {
+  status: string;
+  message: string;
+  todo_id: number;
+}
+
+export default { analysisAPI, interviewAPI, roadmapAPI };

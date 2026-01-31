@@ -1,10 +1,7 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Upload, Mic, BookOpen, ChevronRight, Github } from 'lucide-react'
 
 function App() {
-  const [file, setFile] = useState<File | null>(null)
-
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 selection:bg-indigo-500/30">
       {/* Header */}

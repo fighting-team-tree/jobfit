@@ -1,19 +1,66 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
-import { analysisAPI, roadmapAPI, type GapAnalysis, type Roadmap } from '../lib/api';
+import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function DashboardPage() {
     const navigate = useNavigate();
-    const { resumeAnalysis, jdText, setJdText, gapAnalysis, setGapAnalysis, clearAll } = useProfileStore();
+    const {
+        resumeAnalysis,
+        resumeFileResult,
+        githubAnalysis,
+        jdText,
+        setJdText,
+        gapAnalysis,
+        setGapAnalysis,
+        clearAll
+    } = useProfileStore();
 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isScraping, setIsScraping] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
+    const [jdUrl, setJdUrl] = useState('');
+
+    const githubSkills = githubAnalysis
+        ? [
+            githubAnalysis.primary_language,
+            ...(githubAnalysis.frameworks ?? []),
+            ...(githubAnalysis.skills_identified ?? [])
+        ].filter(Boolean)
+        : [];
+
+    const githubProfile = githubAnalysis
+        ? { skills: githubSkills, experience: [], projects: [] }
+        : null;
+
+    // Use file result's structured data if available, otherwise use resumeAnalysis or GitHub analysis
+    const profileData = resumeFileResult?.structured || resumeAnalysis || githubProfile;
+    const hasProfile = !!(profileData && (profileData.skills?.length || profileData.experience?.length));
+
+    const handleScrapeJD = async () => {
+        if (!jdUrl.trim()) return;
+        
+        setIsScraping(true);
+        setError(null);
+        
+        try {
+            const result = await analysisAPI.scrapeJD(jdUrl);
+            if (result.success && result.raw_text) {
+                setJdText(result.raw_text);
+            } else {
+                setError(result.error || 'JD 스크래핑에 실패했습니다. 직접 입력해주세요.');
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'JD 스크래핑 중 오류가 발생했습니다.');
+        } finally {
+            setIsScraping(false);
+        }
+    };
 
     const handleAnalyzeGap = async () => {
-        if (!resumeAnalysis) {
+        if (!profileData) {
             setError('먼저 프로필 분석을 완료해주세요.');
             return;
         }
@@ -26,7 +73,7 @@ export default function DashboardPage() {
         setError(null);
 
         try {
-            const result = await analysisAPI.analyzeGap(resumeAnalysis, jdText);
+            const result = await analysisAPI.analyzeGap(profileData, jdText);
             setGapAnalysis(result);
 
             // Also generate roadmap
@@ -39,7 +86,8 @@ export default function DashboardPage() {
         }
     };
 
-    if (!resumeAnalysis) {
+
+    if (!hasProfile) {
         return (
             <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
                 <div className="text-center">
@@ -104,10 +152,35 @@ export default function DashboardPage() {
                                 <h2 className="text-lg font-semibold">채용공고(JD) 입력</h2>
                             </div>
 
+                            {/* URL Input */}
+                            <div className="mb-4 flex gap-2">
+                                <input
+                                    type="url"
+                                    value={jdUrl}
+                                    onChange={(e) => setJdUrl(e.target.value)}
+                                    placeholder="채용공고 URL 입력 (선택사항)"
+                                    className="flex-1 px-4 py-2 bg-neutral-900 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-indigo-500 placeholder:text-neutral-600"
+                                />
+                                <button
+                                    onClick={handleScrapeJD}
+                                    disabled={isScraping || !jdUrl.trim()}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
+                                >
+                                    {isScraping ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            불러오는 중...
+                                        </>
+                                    ) : (
+                                        '불러오기'
+                                    )}
+                                </button>
+                            </div>
+
                             <textarea
                                 value={jdText}
                                 onChange={(e) => setJdText(e.target.value)}
-                                placeholder="채용공고 내용을 붙여넣어주세요...
+                                placeholder="채용공고 내용을 붙여넣거나 위 URL에서 불러오세요...
 
 예시:
 [토스] 백엔드 엔지니어
@@ -141,21 +214,22 @@ export default function DashboardPage() {
                             </div>
 
                             {error && <p className="mt-4 text-red-400 text-sm">{error}</p>}
+
                         </div>
 
                         {/* Profile Summary */}
                         <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
                             <h3 className="text-sm font-medium text-neutral-400 mb-3">내 프로필 요약</h3>
                             <div className="flex flex-wrap gap-1.5 mb-4">
-                                {resumeAnalysis.skills.slice(0, 8).map((skill, i) => (
+                                {(profileData?.skills || []).slice(0, 8).map((skill: string, i: number) => (
                                     <span key={i} className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-xs">
                                         {skill}
                                     </span>
                                 ))}
                             </div>
                             <p className="text-xs text-neutral-500">
-                                경력 {resumeAnalysis.experience.length}건 ·
-                                프로젝트 {resumeAnalysis.projects.length}건
+                                경력 {profileData?.experience?.length || 0}건 ·
+                                프로젝트 {profileData?.projects?.length || 0}건
                             </p>
                         </div>
                     </div>
@@ -211,7 +285,7 @@ export default function DashboardPage() {
                                             <CheckCircle2 className="w-4 h-4" /> 보유 역량
                                         </h4>
                                         <div className="flex flex-wrap gap-1">
-                                            {gapAnalysis.matching_skills.map((skill, i) => (
+                                                                                        {gapAnalysis.matching_skills.map((skill: string, i: number) => (
                                                 <span key={i} className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-xs">
                                                     {skill}
                                                 </span>
@@ -221,7 +295,7 @@ export default function DashboardPage() {
                                     <div>
                                         <h4 className="text-sm font-medium text-red-400 mb-2">⚠️ 부족 역량</h4>
                                         <div className="flex flex-wrap gap-1">
-                                            {gapAnalysis.missing_skills.map((skill, i) => (
+                                                                                        {gapAnalysis.missing_skills.map((skill: string, i: number) => (
                                                 <span key={i} className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded text-xs">
                                                     {skill}
                                                 </span>

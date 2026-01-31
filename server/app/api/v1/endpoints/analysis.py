@@ -9,6 +9,8 @@ from typing import Optional, List
 import json
 
 from app.services.nvidia_service import nvidia_service
+from app.services.resume_parser_service import resume_parser_service
+from app.services.jd_scraper_service import jd_scraper_service
 
 router = APIRouter()
 
@@ -33,6 +35,21 @@ class GapAnalysisRequest(BaseModel):
     jd_text: str
 
 
+class JDUrlRequest(BaseModel):
+    """Request for JD URL scraping."""
+    url: str
+
+
+class JDScrapedResponse(BaseModel):
+    """Response for JD URL scraping."""
+    url: str
+    title: str = ""
+    raw_text: str = ""
+    success: bool = False
+    error: Optional[str] = None
+    method: str = "httpx"
+
+
 class ResumeAnalysisResponse(BaseModel):
     """Structured resume analysis response."""
     skills: List[str] = []
@@ -44,14 +61,31 @@ class ResumeAnalysisResponse(BaseModel):
     parse_error: bool = False
 
 
+class ResumeFileResponse(BaseModel):
+    """Response for file-based resume parsing."""
+    markdown: str = ""
+    structured: Optional[dict] = None
+    pages: int = 0
+    success: bool = False
+    error: Optional[str] = None
+
+
 class GapAnalysisResponse(BaseModel):
     """Gap analysis response."""
-    match_score: int = 0
+    match_score: float = 0  # Changed from int to float
     matching_skills: List[str] = []
     missing_skills: List[str] = []
     recommendations: List[str] = []
     strengths: List[str] = []
     areas_to_improve: List[str] = []
+    # New detailed fields (optional)
+    jd_analysis: Optional[dict] = None
+    profile_skills: Optional[List[str]] = None
+    matching_required: Optional[List[str]] = None
+    missing_required: Optional[List[str]] = None
+    matching_preferred: Optional[List[str]] = None
+    missing_preferred: Optional[List[str]] = None
+    score_breakdown: Optional[dict] = None
 
 
 # ============ API Endpoints ============
@@ -84,20 +118,24 @@ async def analyze_resume_text(request: ResumeTextRequest):
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-@router.post("/resume/file", response_model=ResumeAnalysisResponse)
-async def analyze_resume_file(file: UploadFile = File(...)):
+@router.post("/resume/file", response_model=ResumeFileResponse)
+async def analyze_resume_file(
+    file: UploadFile = File(...),
+    extract_structured: bool = True
+):
     """
-    Upload and analyze a resume file (PDF or TXT).
+    Upload and analyze a resume file (PDF or image).
     
-    - **file**: Resume file (PDF, TXT supported)
+    - **file**: Resume file (PDF, PNG, JPG supported)
+    - **extract_structured**: Whether to extract structured JSON from markdown
     
-    Returns structured resume data.
+    Returns parsed markdown and optionally structured JSON.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
     # Check file extension
-    allowed_extensions = [".pdf", ".txt", ".md"]
+    allowed_extensions = [".pdf", ".png", ".jpg", ".jpeg"]
     file_ext = "." + file.filename.split(".")[-1].lower()
     
     if file_ext not in allowed_extensions:
@@ -109,19 +147,33 @@ async def analyze_resume_file(file: UploadFile = File(...)):
     try:
         content = await file.read()
         
-        if file_ext == ".pdf":
-            # For PDF, we'd need a PDF parser - for now, return error
-            # In production, use pdfplumber or PyPDF2
-            raise HTTPException(
-                status_code=501, 
-                detail="PDF parsing not yet implemented. Please paste text directly."
-            )
-        else:
-            # Text file
-            resume_text = content.decode("utf-8")
+        # Parse file using VLM
+        parse_result = await resume_parser_service.parse_resume_file(
+            file_bytes=content,
+            file_extension=file_ext,
+            apply_pii_mask=True
+        )
         
-        result = await nvidia_service.parse_resume(resume_text)
-        return ResumeAnalysisResponse(**result)
+        if not parse_result["success"]:
+            raise HTTPException(
+                status_code=500, 
+                detail=parse_result.get("error", "Failed to parse resume")
+            )
+        
+        # Optionally extract structured JSON
+        structured_data = None
+        if extract_structured and parse_result["markdown"]:
+            structured_data = await resume_parser_service.parse_to_structured_json(
+                parse_result["markdown"]
+            )
+        
+        return ResumeFileResponse(
+            markdown=parse_result["markdown"],
+            structured=structured_data,
+            pages=parse_result["pages"],
+            success=True,
+            error=None
+        )
         
     except HTTPException:
         raise
@@ -228,3 +280,23 @@ async def analyze_gap(request: GapAnalysisRequest):
         return GapAnalysisResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
+
+
+@router.post("/jd/url", response_model=JDScrapedResponse)
+async def scrape_jd_from_url(request: JDUrlRequest):
+    """
+    Scrape job description from a URL.
+    
+    - **url**: URL of the job posting page
+    
+    Uses httpx + BeautifulSoup first, falls back to Playwright for JS-rendered sites.
+    """
+    if not request.url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    
+    try:
+        result = await jd_scraper_service.scrape_jd_from_url(request.url)
+        return JDScrapedResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+

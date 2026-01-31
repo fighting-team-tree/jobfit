@@ -1,37 +1,63 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mic, MicOff, Phone, PhoneOff, Volume2, Loader2, AlertCircle } from 'lucide-react';
-import { interviewAPI, type InterviewSession } from '../lib/api';
+import { interviewAPI } from '../lib/api';
 import { useProfileStore, useInterviewStore } from '../lib/store';
+
+type SpeechRecognitionResultEvent = {
+    resultIndex: number;
+    results: SpeechRecognitionResultList;
+};
+
+type SpeechRecognitionErrorEvent = {
+    error: string;
+};
+
+type SpeechRecognitionLike = {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
+    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+    start: () => void;
+    stop: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 export default function InterviewPage() {
     const navigate = useNavigate();
-    const { resumeAnalysis, jdText } = useProfileStore();
+    const { resumeAnalysis, resumeFileResult, jdText } = useProfileStore();
     const {
         sessionId, isActive, currentQuestion, questionNumber, totalQuestions,
         conversation, startSession, setQuestion, addMessage, endSession
     } = useInterviewStore();
+
+    const profileData = resumeFileResult?.structured || resumeAnalysis;
 
     const [isStarting, setIsStarting] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [audioPlaying, setAudioPlaying] = useState(false);
+    const [audioPlaying] = useState(false);
 
-    const recognitionRef = useRef<any>(null);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
     // Initialize speech recognition
     useEffect(() => {
-        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-            const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-            recognitionRef.current = new SpeechRecognition();
+        const SpeechRecognitionClass =
+            (window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor; SpeechRecognition?: SpeechRecognitionConstructor })
+                .webkitSpeechRecognition ??
+            (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition;
+
+        if (SpeechRecognitionClass) {
+            recognitionRef.current = new SpeechRecognitionClass();
             recognitionRef.current.continuous = true;
             recognitionRef.current.interimResults = true;
             recognitionRef.current.lang = 'ko-KR';
 
-            recognitionRef.current.onresult = (event: any) => {
+            recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
                 let finalTranscript = '';
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     if (event.results[i].isFinal) {
@@ -43,7 +69,7 @@ export default function InterviewPage() {
                 }
             };
 
-            recognitionRef.current.onerror = (event: any) => {
+            recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
                 console.error('Speech recognition error:', event.error);
                 setIsListening(false);
             };
@@ -57,7 +83,7 @@ export default function InterviewPage() {
     }, []);
 
     const handleStartInterview = async () => {
-        if (!resumeAnalysis || !jdText) {
+        if (!profileData || !jdText) {
             setError('프로필과 채용공고 분석을 먼저 완료해주세요.');
             return;
         }
@@ -67,7 +93,7 @@ export default function InterviewPage() {
 
         try {
             const session = await interviewAPI.startInterview(
-                resumeAnalysis,
+                profileData,
                 jdText,
                 'professional',
                 5
@@ -102,7 +128,7 @@ export default function InterviewPage() {
         if (!sessionId || !transcript.trim()) return;
 
         setIsSending(true);
-        addMessage('candidate', transcript);
+        addMessage('user', transcript);
         const answer = transcript;
         setTranscript('');
 
@@ -114,7 +140,8 @@ export default function InterviewPage() {
                 // Navigate to feedback page
                 navigate(`/interview/feedback/${sessionId}`);
             } else if (response.question) {
-                setQuestion(response.question, response.question_number);
+                const nextQuestionNumber = response.question_number ?? questionNumber + 1;
+                setQuestion(response.question, nextQuestionNumber);
                 addMessage('interviewer', response.question);
             }
         } catch (err) {
@@ -132,7 +159,7 @@ export default function InterviewPage() {
     };
 
     // Check prerequisites
-    if (!resumeAnalysis) {
+    if (!profileData) {
         return (
             <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
                 <div className="text-center">

@@ -1,0 +1,35 @@
+# CodeRabbit Configuration File
+# Documentation: https://coderabbit.ai/docs/configure-coderabbit
+
+# Review Language (User requested: Korean)
+language: "ko-KR"
+
+# Early Access features (Jules etc.)
+early_access: true
+
+reviews:
+  # Profile: "chill" for less noise, "assertive" for more strictness
+  profile: "chill"
+  
+  # Workflow
+  request_changes_workflow: false # Do not auto-request changes (let humans decide)
+  high_level_summary: true        # Generate a summary at the top of the PR
+  
+  # Auto-review settings
+  auto_review:
+    enabled: true
+    # Review all PRs including those targeting 'dev' and 'main'
+    # No branch restrictions applied here, so it will review everything by default.
+    ignore_title_keywords:
+      - "WIP"
+      - "Do not review"
+    drafts: false # Do not review draft PRs (save tokens/noise)
+
+  # Tools/Linters can be enabled here if needed in future
+  # tools:
+  #   python-pylint:
+  #     enabled: true
+
+chat:
+  # Jules Settings (Conversational AI)
+  auto_reply: true # Enable Jules to reply to comments automatically
