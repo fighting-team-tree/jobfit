@@ -144,7 +144,29 @@ export const analysisAPI = {
     });
     return handleResponse<GapAnalysis>(response);
   },
+
+  /**
+   * Scrape job description from URL
+   */
+  async scrapeJD(url: string): Promise<JDScrapedResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/jd/url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    return handleResponse<JDScrapedResponse>(response);
+  },
 };
+
+export interface JDScrapedResponse {
+  url: string;
+  title: string;
+  raw_text: string;
+  success: boolean;
+  error?: string;
+  method: 'httpx' | 'playwright';
+}
+
 
 export const interviewAPI = {
   /**

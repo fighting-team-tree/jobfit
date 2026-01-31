@@ -10,6 +10,7 @@ import json
 
 from app.services.nvidia_service import nvidia_service
 from app.services.resume_parser_service import resume_parser_service
+from app.services.jd_scraper_service import jd_scraper_service
 
 router = APIRouter()
 
@@ -32,6 +33,21 @@ class GapAnalysisRequest(BaseModel):
     """Request for profile vs JD gap analysis."""
     profile: dict
     jd_text: str
+
+
+class JDUrlRequest(BaseModel):
+    """Request for JD URL scraping."""
+    url: str
+
+
+class JDScrapedResponse(BaseModel):
+    """Response for JD URL scraping."""
+    url: str
+    title: str = ""
+    raw_text: str = ""
+    success: bool = False
+    error: Optional[str] = None
+    method: str = "httpx"
 
 
 class ResumeAnalysisResponse(BaseModel):
@@ -218,3 +234,23 @@ async def analyze_gap(request: GapAnalysisRequest):
         return GapAnalysisResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
+
+
+@router.post("/jd/url", response_model=JDScrapedResponse)
+async def scrape_jd_from_url(request: JDUrlRequest):
+    """
+    Scrape job description from a URL.
+    
+    - **url**: URL of the job posting page
+    
+    Uses httpx + BeautifulSoup first, falls back to Playwright for JS-rendered sites.
+    """
+    if not request.url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    
+    try:
+        result = await jd_scraper_service.scrape_jd_from_url(request.url)
+        return JDScrapedResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+
