@@ -1,0 +1,8 @@
+{
+  "permission": {
+    "skill": {
+      "jobfit-*": "allow",
+      "*": "ask"
+    }
+  }
+}
