@@ -3,11 +3,11 @@
 - **Goal:** Testing and verifying NVIDIA NIM (Nemotron-Parse) API for resume parsing.
 
 ## Recent Actions
+- **Environment Setup:**
+  - Created `.env.example` and `.env` files for managing API keys and app configurations.
 - **NVIDIA Model Testing:**
   - Created `tests/test_nvidia_parse.py` for experimental testing of **Nemotron-Parse 1.1**.
-  - Implemented Base64 image encoding and API call logic with `httpx`.
   - Added PII masking logic (Email, Phone) using Regex according to security rules.
-  - Added `Pillow` dependency for image processing.
 - **Git & Collaboration:**
   - Created `test/nvidia-model` branch.
 - **Structure:**
