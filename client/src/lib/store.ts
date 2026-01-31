@@ -3,7 +3,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ResumeAnalysis, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse } from './api';
+import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse } from './api';
 
 // ============ Profile Store ============
 
@@ -15,7 +15,7 @@ interface ProfileState {
   jdText: string;
   
   // Parsed results
-  resumeAnalysis: ResumeAnalysis | null;
+  profile: ProfileStructured | null;
   resumeFileResult: ResumeFileResponse | null;
   githubAnalysis: GitHubAnalysisResponse | null;
   gapAnalysis: GapAnalysis | null;
@@ -23,7 +23,7 @@ interface ProfileState {
   // Actions
   setResumeText: (text: string) => void;
   setResumeFile: (file: File | null) => void;
-  setResumeAnalysis: (analysis: ResumeAnalysis | null) => void;
+  setProfile: (profile: ProfileStructured | null) => void;
   setResumeFileResult: (result: ResumeFileResponse | null) => void;
   setGitHubUrl: (url: string) => void;
   setGitHubAnalysis: (analysis: GitHubAnalysisResponse | null) => void;
@@ -38,7 +38,7 @@ const initialProfileState = {
   resumeFile: null,
   githubUrl: '',
   jdText: '',
-  resumeAnalysis: null,
+  profile: null,
   resumeFileResult: null,
   githubAnalysis: null,
   gapAnalysis: null,
@@ -51,7 +51,7 @@ export const useProfileStore = create<ProfileState>()(
       
       setResumeText: (text) => set({ resumeText: text }),
       setResumeFile: (file) => set({ resumeFile: file }),
-      setResumeAnalysis: (analysis) => set({ resumeAnalysis: analysis }),
+      setProfile: (profile) => set({ profile }),
       setResumeFileResult: (result) => set({ resumeFileResult: result }),
       setGitHubUrl: (url) => set({ githubUrl: url }),
       setGitHubAnalysis: (analysis) => set({ githubAnalysis: analysis }),
@@ -67,7 +67,7 @@ export const useProfileStore = create<ProfileState>()(
         resumeText: state.resumeText,
         githubUrl: state.githubUrl,
         jdText: state.jdText,
-        resumeAnalysis: state.resumeAnalysis,
+        profile: state.profile,
         resumeFileResult: state.resumeFileResult,
         githubAnalysis: state.githubAnalysis,
         gapAnalysis: state.gapAnalysis,

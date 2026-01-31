@@ -7,9 +7,7 @@ import { useProfileStore } from '../lib/store';
 export default function DashboardPage() {
     const navigate = useNavigate();
     const {
-        resumeAnalysis,
-        resumeFileResult,
-        githubAnalysis,
+        profile,
         jdText,
         setJdText,
         gapAnalysis,
@@ -24,20 +22,7 @@ export default function DashboardPage() {
     const [jdUrl, setJdUrl] = useState('');
     const resetLockRef = useRef(false);
 
-    const githubSkills = githubAnalysis
-        ? [
-            githubAnalysis.primary_language,
-            ...(githubAnalysis.frameworks ?? []),
-            ...(githubAnalysis.skills_identified ?? [])
-        ].filter(Boolean)
-        : [];
-
-    const githubProfile = githubAnalysis
-        ? { skills: githubSkills, experience: [], projects: [] }
-        : null;
-
-    // Use file result's structured data if available, otherwise use resumeAnalysis or GitHub analysis
-    const profileData = resumeFileResult?.structured || resumeAnalysis || githubProfile;
+    const profileData = profile;
     const hasProfile = !!(profileData && (profileData.skills?.length || profileData.experience?.length));
 
     const handleScrapeJD = async () => {

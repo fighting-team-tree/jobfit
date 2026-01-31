@@ -6,26 +6,47 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/
 
 // ============ Types ============
 
-export interface ResumeAnalysis {
+export interface ProfileContact {
+  email?: string;
+  phone?: string;
+  github?: string;
+  blog?: string;
+}
+
+export interface ProfileExperience {
+  company: string;
+  role?: string;
+  duration?: string;
+  description?: string;
+}
+
+export interface ProfileEducation {
+  school: string;
+  degree?: string;
+  major?: string;
+  year?: string;
+  gpa?: string;
+}
+
+export interface ProfileProject {
+  name: string;
+  description?: string;
+  tech_stack?: string[];
+  role?: string;
+}
+
+export interface ProfileStructured {
+  name?: string;
+  contact?: ProfileContact;
   skills: string[];
-  experience: Array<{
-    company: string;
-    role: string;
-    duration?: string;
-    description?: string;
-  }>;
-  education: Array<{
-    school: string;
-    degree: string;
-    major?: string;
-    year?: string;
-  }>;
-  projects: Array<{
-    name: string;
-    description: string;
-    tech_stack: string[];
-  }>;
+  experience: ProfileExperience[];
+  education: ProfileEducation[];
+  projects: ProfileProject[];
   certifications: string[];
+  awards?: string[];
+}
+
+export interface ResumeAnalysis extends ProfileStructured {
   raw_text?: string;
   parse_error?: boolean;
 }
@@ -37,9 +58,17 @@ export interface GitHubAnalysisResponse {
   description?: string;
   stars?: number;
   total_repos?: number;
-  repos_analyzed?: string[];
+  repos_analyzed?: Array<{
+    name: string;
+    language?: string;
+    stars: number;
+  }>;
   languages?: Record<string, number>;
-  dependencies?: Record<string, string>;
+  dependencies?: {
+    python: string[];
+    javascript: string[];
+    other?: string[];
+  };
   topics?: string[];
   primary_language?: string;
   frameworks?: string[];
@@ -51,40 +80,11 @@ export interface GitHubAnalysisResponse {
 
 export interface ResumeFileResponse {
   markdown: string;
-  structured: {
-    name?: string;
-    contact?: {
-      email?: string;
-      phone?: string;
-      github?: string;
-      blog?: string;
-    };
-    skills?: string[];
-    experience?: Array<{
-      company: string;
-      role: string;
-      duration?: string;
-      description?: string;
-    }>;
-    education?: Array<{
-      school: string;
-      degree?: string;
-      major?: string;
-      year?: string;
-      gpa?: string;
-    }>;
-    projects?: Array<{
-      name: string;
-      description?: string;
-      tech_stack?: string[];
-      role?: string;
-    }>;
-    certifications?: string[];
-    awards?: string[];
-  } | null;
+  structured: ProfileStructured | null;
   pages: number;
   success: boolean;
   error?: string;
+  structured_parse_error?: boolean;
 }
 
 export interface GapAnalysis {
@@ -94,6 +94,23 @@ export interface GapAnalysis {
   recommendations: string[];
   strengths: string[];
   areas_to_improve: string[];
+  jd_analysis?: {
+    required_skills?: string[];
+    preferred_skills?: string[];
+  };
+  profile_skills?: string[];
+  matching_required?: string[];
+  missing_required?: string[];
+  matching_preferred?: string[];
+  missing_preferred?: string[];
+  score_breakdown?: {
+    required_matched?: number;
+    required_total?: number;
+    preferred_matched?: number;
+    preferred_total?: number;
+    required_score?: number;
+    preferred_score?: number;
+  };
 }
 
 // ============ API Functions ============
@@ -155,7 +172,7 @@ export const analysisAPI = {
   /**
    * Perform gap analysis between profile and JD
    */
-  async analyzeGap(profile: object, jdText: string): Promise<GapAnalysis> {
+  async analyzeGap(profile: ProfileStructured, jdText: string): Promise<GapAnalysis> {
     const response = await fetch(`${API_BASE_URL}/analyze/gap`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -211,7 +228,7 @@ export const interviewAPI = {
    * Start interview session
    */
   async startInterview(
-    profile: object,
+    profile: ProfileStructured,
     jdText: string,
     persona: 'professional' | 'friendly' | 'challenging' = 'professional',
     maxQuestions: number = 5

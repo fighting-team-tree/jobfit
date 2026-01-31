@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw } from 'lucide-react';
-import { analysisAPI, type ResumeAnalysis } from '../lib/api';
+import { analysisAPI } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function ProfilePage() {
@@ -11,7 +11,7 @@ export default function ProfilePage() {
         resumeText, setResumeText,
         resumeFile, setResumeFile,
         resumeFileResult, setResumeFileResult,
-        resumeAnalysis, setResumeAnalysis,
+        setProfile,
         githubUrl, setGitHubUrl,
         githubAnalysis, setGitHubAnalysis,
         clearAll
@@ -60,27 +60,29 @@ export default function ProfilePage() {
                 const result = await analysisAPI.analyzeResumeFile(resumeFile, true);
                 setResumeFileResult(result);
                 if (result.structured) {
-                    const normalized: ResumeAnalysis = {
-                        skills: result.structured.skills ?? [],
-                        experience: result.structured.experience ?? [],
-                        education: result.structured.education ?? [],
-                        projects: result.structured.projects ?? [],
-                        certifications: result.structured.certifications ?? [],
-                        raw_text: result.markdown,
-                        parse_error: false,
-                    };
-                    setResumeAnalysis(normalized);
+                    setProfile(result.structured);
                 }
             } else if (uploadMode === 'text' && resumeText.trim()) {
                 const result = await analysisAPI.analyzeResume(resumeText);
-                setResumeAnalysis(result);
-
-                const structuredResult = {
+                const profileData = {
+                    name: result.name,
+                    contact: result.contact,
                     skills: result.skills,
                     experience: result.experience,
                     education: result.education,
                     projects: result.projects,
                     certifications: result.certifications,
+                    awards: result.awards,
+                };
+                setProfile(profileData);
+
+                const structuredResult = {
+                    skills: profileData.skills,
+                    experience: profileData.experience,
+                    education: profileData.education,
+                    projects: profileData.projects,
+                    certifications: profileData.certifications,
+                    awards: profileData.awards,
                 };
                 setResumeFileResult({
                     markdown: resumeText,
@@ -116,6 +118,18 @@ export default function ProfilePage() {
         try {
             const result = await analysisAPI.analyzeGitHub(githubUrl);
             setGitHubAnalysis(result);
+            const githubSkills = [
+                result.primary_language,
+                ...(result.frameworks ?? []),
+                ...(result.skills_identified ?? [])
+            ].filter(Boolean) as string[];
+            setProfile({
+                skills: githubSkills,
+                experience: [],
+                education: [],
+                projects: [],
+                certifications: [],
+            });
         } catch (err) {
             setGithubError(err instanceof Error ? err.message : 'GitHub 분석 중 오류가 발생했습니다.');
         } finally {
@@ -131,7 +145,7 @@ export default function ProfilePage() {
 
     const structured = resumeFileResult?.structured;
     const hasAnyAnalysis = Boolean(resumeFileResult?.success || githubAnalysis);
-    const resumeCompleted = Boolean(resumeFileResult?.success || resumeAnalysis);
+    const resumeCompleted = Boolean(resumeFileResult?.success);
 
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-100">
@@ -375,15 +389,19 @@ export default function ProfilePage() {
                                                 <span className="text-emerald-400 capitalize">{githubAnalysis.skill_level}</span>
                                             </p>
                                         )}
-                                        {githubAnalysis.frameworks?.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                                {githubAnalysis.frameworks.slice(0, 5).map((fw: string, i: number) => (
-                                                    <span key={i} className="px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded text-xs">
-                                                        {fw}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
+                                        {(() => {
+                                            const frameworks = githubAnalysis.frameworks ?? [];
+                                            if (frameworks.length === 0) return null;
+                                            return (
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {frameworks.slice(0, 5).map((fw: string, i: number) => (
+                                                        <span key={i} className="px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded text-xs">
+                                                            {fw}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}

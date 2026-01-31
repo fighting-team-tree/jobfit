@@ -27,13 +27,13 @@ type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 export default function InterviewPage() {
     const navigate = useNavigate();
-    const { resumeAnalysis, resumeFileResult, jdText } = useProfileStore();
+    const { profile, jdText } = useProfileStore();
     const {
         sessionId, isActive, currentQuestion, questionNumber, totalQuestions,
         conversation, startSession, setQuestion, addMessage, endSession
     } = useInterviewStore();
 
-    const profileData = resumeFileResult?.structured || resumeAnalysis;
+    const profileData = profile;
 
     const [isStarting, setIsStarting] = useState(false);
     const [isListening, setIsListening] = useState(false);
