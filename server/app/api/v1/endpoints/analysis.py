@@ -132,41 +132,79 @@ async def analyze_resume_file(file: UploadFile = File(...)):
 @router.post("/github")
 async def analyze_github_repo(request: GitHubAnalysisRequest):
     """
-    Analyze a GitHub repository to extract skills and code patterns.
+    GitHub URL을 분석하여 기술 역량을 추출합니다.
     
-    - **repo_url**: GitHub repository URL
+    - **repo_url**: GitHub URL (리포지토리 또는 사용자 프로필)
+      - 리포지토리: https://github.com/owner/repo
+      - 사용자 프로필: https://github.com/username
     
-    Returns analysis of tech stack, code style, and identified skills.
+    공개 리포지토리만 분석 가능합니다.
     """
-    # Basic URL validation
+    from app.services.github_service import github_service
+    
+    # URL 유효성 검사
     if "github.com" not in request.repo_url:
-        raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+        raise HTTPException(status_code=400, detail="잘못된 GitHub URL입니다.")
     
     try:
-        # Extract owner/repo from URL
-        parts = request.repo_url.replace("https://", "").replace("http://", "")
-        parts = parts.replace("github.com/", "").strip("/")
+        # Step 1: GitHub 데이터 조회
+        repo_data = await github_service.analyze_repository(request.repo_url)
         
-        if "/" not in parts:
-            raise HTTPException(status_code=400, detail="Invalid repository URL format")
+        # Step 2: NVIDIA LLM으로 스킬 추론
+        skills_analysis = await nvidia_service.infer_skills_from_github(
+            languages=repo_data.get("languages", {}),
+            dependencies=repo_data.get("dependencies", {}),
+            readme_excerpt=repo_data.get("readme_excerpt"),
+            topics=repo_data.get("topics", [])
+        )
         
-        owner, repo = parts.split("/")[:2]
+        # 사용자 프로필 vs 리포지토리 응답 구분
+        is_user_profile = "username" in repo_data
         
-        # TODO: Implement actual GitHub API integration
-        # For now, return mock response
-        return {
-            "repo": f"{owner}/{repo}",
-            "languages": ["Python", "JavaScript", "TypeScript"],
-            "skills_identified": ["FastAPI", "React", "Docker"],
-            "code_quality": "Good",
-            "commit_frequency": "Active",
-            "note": "Full GitHub analysis coming soon"
-        }
+        if is_user_profile:
+            return {
+                "type": "user_profile",
+                "username": repo_data.get("username"),
+                "total_repos": repo_data.get("total_repos", 0),
+                "repos_analyzed": repo_data.get("repos_analyzed", []),
+                "languages": repo_data.get("languages", {}),
+                "dependencies": repo_data.get("dependencies", {}),
+                "topics": repo_data.get("topics", []),
+                # LLM 분석
+                "primary_language": skills_analysis.get("primary_language"),
+                "frameworks": skills_analysis.get("frameworks", []),
+                "skill_level": skills_analysis.get("skill_level"),
+                "skills_identified": skills_analysis.get("skills_identified", []),
+                "code_patterns": skills_analysis.get("code_patterns", []),
+                "summary": skills_analysis.get("summary", "")
+            }
+        else:
+            return {
+                "type": "repository",
+                "repo": repo_data.get("repo"),
+                "description": repo_data.get("description"),
+                "stars": repo_data.get("stars", 0),
+                "languages": repo_data.get("languages", {}),
+                "dependencies": repo_data.get("dependencies", {}),
+                "topics": repo_data.get("topics", []),
+                # LLM 분석
+                "primary_language": skills_analysis.get("primary_language"),
+                "frameworks": skills_analysis.get("frameworks", []),
+                "skill_level": skills_analysis.get("skill_level"),
+                "skills_identified": skills_analysis.get("skills_identified", []),
+                "code_patterns": skills_analysis.get("code_patterns", []),
+                "summary": skills_analysis.get("summary", "")
+            }
         
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"GitHub analysis failed: {str(e)}")
+        if "404" in str(e) or "Not Found" in str(e):
+            raise HTTPException(
+                status_code=404, 
+                detail="리포지토리 또는 사용자를 찾을 수 없습니다. 공개 계정인지 확인해주세요."
+            )
+        raise HTTPException(status_code=500, detail=f"GitHub 분석 실패: {str(e)}")
 
 
 @router.post("/gap", response_model=GapAnalysisResponse)

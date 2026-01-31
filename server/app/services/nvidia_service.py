@@ -197,5 +197,80 @@ JSON만 응답하세요."""
             return result["choices"][0]["message"]["content"].strip()
 
 
+    async def infer_skills_from_github(
+        self,
+        languages: dict,
+        dependencies: dict,
+        readme_excerpt: str = None,
+        topics: list = None
+    ) -> dict:
+        """
+        Analyze GitHub repository data and infer technical skills.
+        
+        Returns:
+            {
+                "primary_language": "Python",
+                "frameworks": ["FastAPI", "React"],
+                "skill_level": "intermediate",
+                "skills_identified": ["Backend Development", "API Design"],
+                "code_patterns": ["REST API", "Async Programming"]
+            }
+        """
+        prompt = f"""GitHub 리포지토리 데이터를 분석하여 개발자의 기술 역량을 추론해주세요.
+
+언어 통계 (비율 %):
+{languages}
+
+의존성 패키지:
+- Python: {dependencies.get('python', [])}
+- JavaScript: {dependencies.get('javascript', [])}
+
+토픽 태그: {topics or []}
+
+README 발췌:
+{readme_excerpt[:500] if readme_excerpt else '없음'}
+
+다음 형식의 JSON으로 응답해주세요:
+{{
+    "primary_language": "주 사용 언어",
+    "frameworks": ["사용 프레임워크/라이브러리 목록"],
+    "skill_level": "beginner/intermediate/advanced 중 하나",
+    "skills_identified": ["추론된 기술 역량 목록"],
+    "code_patterns": ["코드 패턴/아키텍처 스타일"],
+    "summary": "1-2줄 요약"
+}}
+
+JSON만 응답하세요."""
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self.BASE_URL}/chat/completions",
+                headers=self.headers,
+                json={
+                    "model": "meta/llama-3.1-70b-instruct",
+                    "messages": [
+                        {"role": "system", "content": "You are a technical recruiter AI that analyzes GitHub repositories to identify developer skills."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 1000
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            content = result["choices"][0]["message"]["content"]
+            
+            import json
+            try:
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0]
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0]
+                return json.loads(content.strip())
+            except json.JSONDecodeError:
+                return {"raw_text": content, "parse_error": True}
+
+
 # Singleton instance
 nvidia_service = NvidiaService()

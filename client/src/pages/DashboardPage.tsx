@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic } from 'lucide-react';
+import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
 import { analysisAPI, roadmapAPI, type GapAnalysis, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function DashboardPage() {
     const navigate = useNavigate();
-    const { resumeAnalysis, jdText, setJdText, gapAnalysis, setGapAnalysis } = useProfileStore();
+    const { resumeAnalysis, jdText, setJdText, gapAnalysis, setGapAnalysis, clearAll } = useProfileStore();
 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -74,8 +74,25 @@ export default function DashboardPage() {
 
             <main className="pt-24 pb-20 px-6">
                 <div className="container mx-auto max-w-5xl">
-                    <h1 className="text-3xl font-bold mb-2">갭 분석 대시보드</h1>
-                    <p className="text-neutral-400 mb-8">채용공고와 프로필을 비교하여 부족한 역량을 파악합니다.</p>
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h1 className="text-3xl font-bold mb-2">갭 분석 대시보드</h1>
+                            <p className="text-neutral-400">채용공고와 프로필을 비교하여 부족한 역량을 파악합니다.</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (confirm('모든 입력 데이터를 초기화하시겠습니까?')) {
+                                    clearAll();
+                                    setRoadmap(null);
+                                    setError(null);
+                                }
+                            }}
+                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-white/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors text-neutral-400 hover:text-white"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                            초기화
+                        </button>
+                    </div>
 
                     <div className="grid lg:grid-cols-3 gap-6">
                         {/* JD Input */}
