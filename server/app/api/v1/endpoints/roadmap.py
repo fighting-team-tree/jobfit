@@ -2,15 +2,21 @@
 Roadmap API Endpoints
 
 Generates personalized learning roadmaps based on gap analysis.
+Now includes Claude Agent integration for intelligent roadmap and problem generation.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime, timedelta
 
 from app.services.nvidia_service import nvidia_service
 
 router = APIRouter()
+
+
+# ============ In-Memory Storage ============
+roadmaps_store: dict = {}
+problems_store: dict = {}
 
 
 # ============ Request/Response Models ============
@@ -49,6 +55,42 @@ class RoadmapResponse(BaseModel):
     weekly_plans: List[WeeklyPlan]
     total_estimated_hours: int
     recommended_resources: List[dict]
+
+
+# New models for Claude Agent integration
+class AgentRoadmapRequest(BaseModel):
+    """Request for Claude Agent roadmap generation."""
+    missing_skills: List[str]
+    timeline_weeks: int = 4
+    target_role: Optional[str] = None
+    current_level: str = "intermediate"
+
+
+class ProblemResponse(BaseModel):
+    """Response for a generated problem."""
+    id: str
+    title: str
+    description: str
+    difficulty: Literal["easy", "medium", "hard"]
+    problem_type: Literal["coding", "quiz", "practical"]
+    skill: str
+    hints: List[str] = []
+    test_cases: List[dict] = []
+    starter_code: Optional[str] = None
+
+
+class GenerateProblemsRequest(BaseModel):
+    """Request to generate problems for a week."""
+    week_number: int
+    focus_skills: List[str]
+    learning_objectives: List[str] = []
+    num_problems: int = 3
+
+
+class EvaluateSolutionRequest(BaseModel):
+    """Request to evaluate a user's solution."""
+    problem_id: str
+    user_solution: str
 
 
 # ============ API Endpoints ============
@@ -152,6 +194,153 @@ async def generate_roadmap(request: RoadmapRequest):
     )
 
 
+@router.post("/generate/agent")
+async def generate_roadmap_with_agent(request: AgentRoadmapRequest):
+    """
+    Generate a learning roadmap using Claude Agent.
+    
+    - **missing_skills**: Skills to learn
+    - **timeline_weeks**: Number of weeks
+    - **target_role**: Target job role
+    - **current_level**: Current skill level
+    
+    Returns AI-generated weekly plans with detailed objectives.
+    """
+    try:
+        from app.agents.roadmap_agent import get_roadmap_agent
+        
+        agent = get_roadmap_agent()
+        roadmap = await agent.generate_roadmap(
+            missing_skills=request.missing_skills,
+            timeline_weeks=request.timeline_weeks,
+            target_role=request.target_role,
+            current_level=request.current_level
+        )
+        
+        # Store roadmap for later reference
+        roadmaps_store[roadmap.id] = roadmap
+        
+        return {
+            "id": roadmap.id,
+            "title": roadmap.title,
+            "description": roadmap.description,
+            "total_weeks": roadmap.total_weeks,
+            "weeks": [
+                {
+                    "week_number": w.week_number,
+                    "title": w.title,
+                    "focus_skills": w.focus_skills,
+                    "learning_objectives": w.learning_objectives,
+                    "resources": w.resources,
+                    "estimated_hours": w.estimated_hours,
+                }
+                for w in roadmap.weeks
+            ],
+            "missing_skills": roadmap.missing_skills,
+            "target_role": roadmap.target_role,
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Roadmap generation failed: {str(e)}")
+
+
+@router.post("/problems/generate", response_model=List[ProblemResponse])
+async def generate_problems(request: GenerateProblemsRequest):
+    """
+    Generate practice problems for a week using Claude Agent.
+    
+    - **week_number**: Week number in the roadmap
+    - **focus_skills**: Skills to focus on
+    - **learning_objectives**: Week's learning objectives
+    - **num_problems**: Number of problems to generate
+    """
+    try:
+        from app.agents.problem_generator import get_problem_generator
+        
+        generator = get_problem_generator()
+        
+        all_problems = []
+        for skill in request.focus_skills[:2]:  # Limit to 2 skills
+            problems = await generator.generate_problems(
+                skill=skill,
+                difficulty="medium",
+                problem_type="coding",
+                count=max(1, request.num_problems // len(request.focus_skills))
+            )
+            all_problems.extend(problems)
+        
+        # Store problems
+        for p in all_problems:
+            problems_store[p.id] = p
+        
+        return [
+            ProblemResponse(
+                id=p.id,
+                title=p.title,
+                description=p.description,
+                difficulty=p.difficulty,
+                problem_type=p.problem_type,
+                skill=p.skill,
+                hints=p.hints,
+                test_cases=p.test_cases,
+                starter_code=p.starter_code,
+            )
+            for p in all_problems
+        ]
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Problem generation failed: {str(e)}")
+
+
+@router.get("/problems/{problem_id}")
+async def get_problem(problem_id: str):
+    """Get a specific problem by ID."""
+    if problem_id not in problems_store:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    
+    p = problems_store[problem_id]
+    return {
+        "id": p.id,
+        "title": p.title,
+        "description": p.description,
+        "difficulty": p.difficulty,
+        "problem_type": p.problem_type,
+        "skill": p.skill,
+        "hints": p.hints,
+        "test_cases": p.test_cases,
+        "starter_code": p.starter_code,
+    }
+
+
+@router.post("/problems/{problem_id}/evaluate")
+async def evaluate_solution(problem_id: str, request: EvaluateSolutionRequest):
+    """
+    Evaluate a user's solution using Claude Agent.
+    
+    Returns detailed feedback and score.
+    """
+    if problem_id not in problems_store:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    
+    try:
+        from app.agents.problem_generator import get_problem_generator
+        
+        problem = problems_store[problem_id]
+        generator = get_problem_generator()
+        
+        result = await generator.evaluate_solution(
+            problem=problem,
+            user_solution=request.user_solution
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+
 @router.post("/todo/complete")
 async def complete_todo(todo_id: int, roadmap_id: str = "default"):
     """
@@ -164,3 +353,4 @@ async def complete_todo(todo_id: int, roadmap_id: str = "default"):
         "message": f"Todo {todo_id} marked as completed",
         "todo_id": todo_id
     }
+
