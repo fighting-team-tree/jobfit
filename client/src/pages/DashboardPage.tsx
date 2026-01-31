@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
 import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
+import SkillRadarChart from '../components/charts/SkillRadarChart';
 
 export default function DashboardPage() {
     const navigate = useNavigate();
@@ -229,99 +230,146 @@ export default function DashboardPage() {
 
                     {/* Gap Analysis Result */}
                     {gapAnalysis && (
-                        <div className="mt-8 grid lg:grid-cols-2 gap-6">
-                            {/* Match Score */}
-                            <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
-                                <h2 className="text-lg font-semibold mb-4">매칭 점수</h2>
-                                <div className="flex items-center gap-4">
-                                    <div className="relative w-24 h-24">
-                                        <svg className="transform -rotate-90 w-24 h-24">
+                        <div className="mt-8 space-y-6">
+                            <div className="grid lg:grid-cols-3 gap-6">
+                                {/* Match Score */}
+                                <div className="p-6 rounded-2xl border border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                                    <h2 className="text-lg font-semibold mb-6">매칭 점수</h2>
+                                    <div className="relative w-40 h-40 mb-4">
+                                        <svg className="transform -rotate-90 w-40 h-40">
                                             <circle
-                                                cx="48"
-                                                cy="48"
-                                                r="40"
+                                                cx="80"
+                                                cy="80"
+                                                r="70"
                                                 stroke="currentColor"
-                                                strokeWidth="8"
+                                                strokeWidth="12"
                                                 fill="transparent"
                                                 className="text-neutral-800"
                                             />
                                             <circle
-                                                cx="48"
-                                                cy="48"
-                                                r="40"
+                                                cx="80"
+                                                cy="80"
+                                                r="70"
                                                 stroke="currentColor"
-                                                strokeWidth="8"
+                                                strokeWidth="12"
                                                 fill="transparent"
-                                                strokeDasharray={251.2}
-                                                strokeDashoffset={251.2 * (1 - gapAnalysis.match_score / 100)}
+                                                strokeDasharray={439.8}
+                                                strokeDashoffset={439.8 * (1 - gapAnalysis.match_score / 100)}
                                                 className={gapAnalysis.match_score >= 70 ? 'text-emerald-500' : gapAnalysis.match_score >= 40 ? 'text-yellow-500' : 'text-red-500'}
                                             />
                                         </svg>
-                                        <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">
-                                            {gapAnalysis.match_score}%
-                                        </span>
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                            <span className="text-4xl font-bold">{gapAnalysis.match_score}</span>
+                                            <span className="text-sm text-neutral-500">점</span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm text-neutral-400">
-                                            {gapAnalysis.match_score >= 70
-                                                ? '좋은 매칭입니다!'
-                                                : gapAnalysis.match_score >= 40
-                                                    ? '보완이 필요합니다'
-                                                    : '갭이 큽니다'}
-                                        </p>
-                                    </div>
+                                    <p className="text-sm text-neutral-400 text-center">
+                                        {gapAnalysis.match_score >= 70
+                                            ? '직무 적합도가 매우 높습니다! 🎉'
+                                            : gapAnalysis.match_score >= 40
+                                                ? '일부분은 잘 맞지만 보완이 필요해요.'
+                                                : '직무와 핏을 맞추기 위해 노력이 필요해요.'}
+                                    </p>
                                 </div>
 
-                                <div className="mt-6 grid grid-cols-2 gap-4">
-                                    <div>
-                                        <h4 className="text-sm font-medium text-emerald-400 mb-2 flex items-center gap-1">
-                                            <CheckCircle2 className="w-4 h-4" /> 보유 역량
-                                        </h4>
-                                        <div className="flex flex-wrap gap-1">
-                                                                                        {gapAnalysis.matching_skills.map((skill: string, i: number) => (
-                                                <span key={i} className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-xs">
-                                                    {skill}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-medium text-red-400 mb-2">⚠️ 부족 역량</h4>
-                                        <div className="flex flex-wrap gap-1">
-                                                                                        {gapAnalysis.missing_skills.map((skill: string, i: number) => (
-                                                <span key={i} className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded text-xs">
-                                                    {skill}
-                                                </span>
-                                            ))}
-                                        </div>
+                                {/* Radar Chart (New) */}
+                                <div className="lg:col-span-2 p-6 rounded-2xl border border-white/10 bg-white/5">
+                                    <h2 className="text-lg font-semibold mb-4">역량 분석 차트</h2>
+                                    <div className="w-full h-full min-h-[300px]">
+                                        <SkillRadarChart
+                                            data={(() => {
+                                                // 1. Collect all relevant skills from JD
+                                                const required = gapAnalysis.jd_analysis?.required_skills || [];
+                                                const preferred = gapAnalysis.jd_analysis?.preferred_skills || [];
+                                                const allJDSkills = Array.from(new Set([...required, ...preferred]));
+
+                                                // 2. Separate matched vs missing
+                                                const matchedSet = new Set(gapAnalysis.matching_skills.map(s => s.toLowerCase()));
+
+                                                // 3. Build chart data
+                                                return allJDSkills.slice(0, 10).map(skill => { // Limit to top 10 to avoid overcrowding
+                                                    const isMatched = matchedSet.has(skill.toLowerCase());
+                                                    const isRequired = required.includes(skill);
+                                                    
+                                                    return {
+                                                        subject: skill,
+                                                        A: isMatched ? 100 : 20, // My Score (20 for visibility even if 0)
+                                                        B: isRequired ? 100 : 70, // JD Score (100 for Required, 70 for Preferred)
+                                                        fullMark: 100
+                                                    };
+                                                });
+                                            })()}
+                                        />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Actions */}
-                            <div className="p-6 rounded-2xl border border-white/10 bg-white/5 flex flex-col justify-between">
-                                <div>
-                                    <h2 className="text-lg font-semibold mb-4">다음 단계</h2>
-                                    <p className="text-neutral-400 text-sm mb-4">
-                                        갭 분석 결과를 바탕으로 학습하거나, 모의 면접을 시작할 수 있습니다.
-                                    </p>
+                            <div className="grid lg:grid-cols-2 gap-6">
+                                {/* Detailed Skills List */}
+                                <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
+                                    <h3 className="text-lg font-semibold mb-4">상세 분석 결과</h3>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <h4 className="text-sm font-medium text-emerald-400 mb-3 flex items-center gap-1">
+                                                <CheckCircle2 className="w-4 h-4" /> 매칭된 역량
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {gapAnalysis.matching_skills.length > 0 ? (
+                                                    gapAnalysis.matching_skills.map((skill: string, i: number) => (
+                                                        <span key={i} className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 rounded-md text-sm border border-emerald-500/20">
+                                                            {skill}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-neutral-500 text-sm">매칭된 항목이 없습니다.</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-medium text-red-400 mb-3 flex items-center gap-1">
+                                                <AlertCircle className="w-4 h-4" /> 부족한 역량
+                                            </h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {gapAnalysis.missing_skills.length > 0 ? (
+                                                    gapAnalysis.missing_skills.map((skill: string, i: number) => (
+                                                        <span key={i} className="px-2.5 py-1 bg-red-500/20 text-red-300 rounded-md text-sm border border-red-500/20">
+                                                            {skill}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-neutral-500 text-sm">완벽합니다!</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="space-y-3">
-                                    <button
-                                        onClick={() => navigate('/roadmap')}
-                                        className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <BookOpen className="w-5 h-5" />
-                                        학습 로드맵 보기
-                                    </button>
-                                    <button
-                                        onClick={() => navigate('/interview')}
-                                        className="w-full px-4 py-3 bg-violet-600 hover:bg-violet-500 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <Mic className="w-5 h-5" />
-                                        모의 면접 시작
-                                    </button>
+                                {/* Actions */}
+                                <div className="p-6 rounded-2xl border border-white/10 bg-white/5 flex flex-col justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-semibold mb-4">Action Plan</h2>
+                                        <p className="text-neutral-400 text-sm mb-6">
+                                            분석된 갭을 바탕으로 <strong>맞춤형 학습 로드맵</strong>을 생성하거나,
+                                            부족한 부분을 보완하기 위한 <strong>AI 모의 면접</strong>을 진행해보세요.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <button
+                                            onClick={() => navigate('/roadmap')}
+                                            className="w-full px-4 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+                                        >
+                                            <BookOpen className="w-5 h-5" />
+                                            학습 로드맵 생성하기
+                                        </button>
+                                        <button
+                                            onClick={() => navigate('/interview')}
+                                            className="w-full px-4 py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-violet-900/20"
+                                        >
+                                            <Mic className="w-5 h-5" />
+                                            AI 면접 연습하기
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
