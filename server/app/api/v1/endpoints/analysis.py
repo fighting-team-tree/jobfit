@@ -72,12 +72,20 @@ class ResumeFileResponse(BaseModel):
 
 class GapAnalysisResponse(BaseModel):
     """Gap analysis response."""
-    match_score: int = 0
+    match_score: float = 0  # Changed from int to float
     matching_skills: List[str] = []
     missing_skills: List[str] = []
     recommendations: List[str] = []
     strengths: List[str] = []
     areas_to_improve: List[str] = []
+    # New detailed fields (optional)
+    jd_analysis: Optional[dict] = None
+    profile_skills: Optional[List[str]] = None
+    matching_required: Optional[List[str]] = None
+    missing_required: Optional[List[str]] = None
+    matching_preferred: Optional[List[str]] = None
+    missing_preferred: Optional[List[str]] = None
+    score_breakdown: Optional[dict] = None
 
 
 # ============ API Endpoints ============
