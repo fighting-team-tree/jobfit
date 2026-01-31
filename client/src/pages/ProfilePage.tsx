@@ -22,6 +22,7 @@ export default function ProfilePage() {
     const [resumeError, setResumeError] = useState<string | null>(null);
     const [githubError, setGithubError] = useState<string | null>(null);
     const [uploadMode, setUploadMode] = useState<'file' | 'text'>('file');
+    const resetLockRef = useRef(false);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -163,10 +164,16 @@ export default function ProfilePage() {
                         </div>
                         <button
                             onClick={() => {
-                                if (confirm('모든 입력 데이터를 초기화하시겠습니까?')) {
-                                    clearAll();
-                                    setResumeError(null);
-                                    setGithubError(null);
+                                if (resetLockRef.current) return;
+                                resetLockRef.current = true;
+                                try {
+                                    if (window.confirm('모든 입력 데이터를 초기화하시겠습니까?')) {
+                                        clearAll();
+                                        setResumeError(null);
+                                        setGithubError(null);
+                                    }
+                                } finally {
+                                    resetLockRef.current = false;
                                 }
                             }}
                             className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-white/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors text-neutral-400 hover:text-white"

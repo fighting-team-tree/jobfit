@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
 import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
@@ -22,6 +22,7 @@ export default function DashboardPage() {
     const [error, setError] = useState<string | null>(null);
     const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
     const [jdUrl, setJdUrl] = useState('');
+    const resetLockRef = useRef(false);
 
     const githubSkills = githubAnalysis
         ? [
@@ -129,10 +130,17 @@ export default function DashboardPage() {
                         </div>
                         <button
                             onClick={() => {
-                                if (confirm('모든 입력 데이터를 초기화하시겠습니까?')) {
-                                    clearAll();
-                                    setRoadmap(null);
-                                    setError(null);
+                                if (resetLockRef.current) return;
+                                resetLockRef.current = true;
+                                try {
+                                    if (window.confirm('모든 입력 데이터를 초기화하시겠습니까?')) {
+                                        clearAll();
+                                        setRoadmap(null);
+                                        setError(null);
+                                        setJdUrl('');
+                                    }
+                                } finally {
+                                    resetLockRef.current = false;
                                 }
                             }}
                             className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 border border-white/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors text-neutral-400 hover:text-white"
