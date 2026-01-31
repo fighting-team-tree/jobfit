@@ -372,6 +372,77 @@ export interface RoadmapTodoCompleteResponse {
   todo_id: number;
 }
 
+// ============ Problem Types ============
+
+export interface Problem {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  type: 'coding' | 'quiz' | 'practical';
+  starter_code?: string;
+  language?: string;
+  hints?: string[];
+  skill?: string;
+  week_number?: number;
+}
+
+export interface EvaluationResult {
+  success: boolean;
+  feedback: string;
+  score?: number;
+  test_results?: {
+    passed: number;
+    failed: number;
+    details?: string[];
+  };
+}
+
+export interface GenerateProblemsRequest {
+  week_number: number;
+  skills: string[];
+  count?: number;
+}
+
+export const problemAPI = {
+  /**
+   * Get a specific problem by ID
+   */
+  async getProblem(problemId: string): Promise<Problem> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/problem/${problemId}`, {
+      method: 'GET',
+      ...fetchOptions,
+    });
+    return handleResponse<Problem>(response);
+  },
+
+  /**
+   * Evaluate a solution for a problem
+   */
+  async evaluateSolution(problemId: string, code: string): Promise<EvaluationResult> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/evaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problem_id: problemId, solution: code }),
+      ...fetchOptions,
+    });
+    return handleResponse<EvaluationResult>(response);
+  },
+
+  /**
+   * Generate problems for a specific week
+   */
+  async generateProblems(request: GenerateProblemsRequest): Promise<Problem[]> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/problems/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      ...fetchOptions,
+    });
+    return handleResponse<Problem[]>(response);
+  },
+};
+
 // ============ Profile Types ============
 
 export interface ProfileSaveRequest {
@@ -419,4 +490,4 @@ export const profileAPI = {
   },
 };
 
-export default { analysisAPI, interviewAPI, roadmapAPI, profileAPI };
+export default { analysisAPI, interviewAPI, roadmapAPI, profileAPI, problemAPI };
