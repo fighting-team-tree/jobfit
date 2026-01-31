@@ -3,7 +3,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse } from './api';
+import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse, Problem } from './api';
 import { profileAPI } from './api';
 
 // ============ Profile Store ============
@@ -233,3 +233,55 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
     conversation: [],
   }),
 }));
+
+// ============ Problem Store ============
+
+interface ProblemState {
+  // 주차별 문제 저장
+  weekProblems: Record<number, Problem[]>;
+
+  // Actions
+  setWeekProblems: (weekNumber: number, problems: Problem[]) => void;
+  addProblems: (weekNumber: number, problems: Problem[]) => void;
+  clearWeekProblems: (weekNumber: number) => void;
+  clearAllProblems: () => void;
+}
+
+export const useProblemStore = create<ProblemState>()(
+  persist(
+    (set) => ({
+      weekProblems: {},
+
+      setWeekProblems: (weekNumber, problems) =>
+        set((state) => ({
+          weekProblems: {
+            ...state.weekProblems,
+            [weekNumber]: problems,
+          },
+        })),
+
+      addProblems: (weekNumber, problems) =>
+        set((state) => ({
+          weekProblems: {
+            ...state.weekProblems,
+            [weekNumber]: [
+              ...(state.weekProblems[weekNumber] || []),
+              ...problems,
+            ],
+          },
+        })),
+
+      clearWeekProblems: (weekNumber) =>
+        set((state) => {
+          const newWeekProblems = { ...state.weekProblems };
+          delete newWeekProblems[weekNumber];
+          return { weekProblems: newWeekProblems };
+        }),
+
+      clearAllProblems: () => set({ weekProblems: {} }),
+    }),
+    {
+      name: 'jobfit-problems',
+    }
+  )
+);

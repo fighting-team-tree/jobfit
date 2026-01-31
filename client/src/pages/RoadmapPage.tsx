@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle, Code2, FileQuestion } from 'lucide-react';
-import { roadmapAPI, problemAPI, type Roadmap, type Problem } from '../lib/api';
-import { useProfileStore } from '../lib/store';
+import { roadmapAPI, problemAPI, type Roadmap } from '../lib/api';
+import { useProfileStore, useProblemStore } from '../lib/store';
 
 export default function RoadmapPage() {
     const navigate = useNavigate();
     const { gapAnalysis } = useProfileStore();
+    const { weekProblems, setWeekProblems } = useProblemStore();
 
     const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [completedTodos, setCompletedTodos] = useState<Set<number>>(new Set());
-    const [weekProblems, setWeekProblems] = useState<Record<number, Problem[]>>({});
     const [generatingWeek, setGeneratingWeek] = useState<number | null>(null);
+    const [weekErrors, setWeekErrors] = useState<Record<number, string>>({});
+    const [showSolution, setShowSolution] = useState<Record<string, boolean>>({});
 
     const generateRoadmap = useCallback(async () => {
         if (!gapAnalysis) return;
@@ -50,18 +52,22 @@ export default function RoadmapPage() {
 
     const generateProblemsForWeek = async (weekNumber: number, skills: string[]) => {
         setGeneratingWeek(weekNumber);
+        setWeekErrors(prev => ({ ...prev, [weekNumber]: '' }));
         try {
             const problems = await problemAPI.generateProblems({
                 week_number: weekNumber,
                 skills,
                 count: 3,
             });
-            setWeekProblems(prev => ({
-                ...prev,
-                [weekNumber]: problems,
-            }));
+            if (problems.length === 0) {
+                setWeekErrors(prev => ({ ...prev, [weekNumber]: '문제 생성에 실패했습니다. 다시 시도해 주세요.' }));
+            }
+            // 스토어에 저장 (persist로 localStorage에도 저장됨)
+            setWeekProblems(weekNumber, problems);
         } catch (err) {
             console.error('Failed to generate problems:', err);
+            const errorMessage = err instanceof Error ? err.message : '문제 생성 중 오류가 발생했습니다.';
+            setWeekErrors(prev => ({ ...prev, [weekNumber]: errorMessage }));
         } finally {
             setGeneratingWeek(null);
         }
@@ -267,31 +273,72 @@ export default function RoadmapPage() {
                                             </div>
 
                                             {weekProblems[week.week_number] && weekProblems[week.week_number].length > 0 ? (
-                                                <div className="space-y-2">
+                                                <div className="space-y-3">
                                                     {weekProblems[week.week_number].map((problem) => (
-                                                        <Link
-                                                            key={problem.id}
-                                                            to={`/problem/${problem.id}`}
-                                                            className="flex items-center justify-between p-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 transition-colors"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-2 h-2 rounded-full ${
-                                                                    problem.difficulty === 'easy' ? 'bg-green-400' :
-                                                                    problem.difficulty === 'medium' ? 'bg-yellow-400' : 'bg-red-400'
-                                                                }`} />
-                                                                <span className="text-sm font-medium">{problem.title}</span>
-                                                                <span className="text-xs text-neutral-500">{problem.skill}</span>
+                                                        <div key={problem.id} className="rounded-lg bg-neutral-900 overflow-hidden">
+                                                            <div className="flex items-center justify-between p-3 hover:bg-neutral-800 transition-colors">
+                                                                <Link
+                                                                    to={`/problem/${problem.id}`}
+                                                                    className="flex items-center gap-3 flex-1"
+                                                                >
+                                                                    <div className={`w-2 h-2 rounded-full ${
+                                                                        problem.difficulty === 'easy' ? 'bg-green-400' :
+                                                                        problem.difficulty === 'medium' ? 'bg-yellow-400' : 'bg-red-400'
+                                                                    }`} />
+                                                                    <span className="text-sm font-medium">{problem.title}</span>
+                                                                    <span className="text-xs text-neutral-500">{problem.skill}</span>
+                                                                </Link>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`text-xs px-2 py-0.5 rounded ${
+                                                                        problem.type === 'coding' ? 'bg-blue-500/20 text-blue-300' :
+                                                                        problem.type === 'quiz' ? 'bg-purple-500/20 text-purple-300' :
+                                                                        'bg-orange-500/20 text-orange-300'
+                                                                    }`}>
+                                                                        {problem.type}
+                                                                    </span>
+                                                                    {problem.solution && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                setShowSolution(prev => ({
+                                                                                    ...prev,
+                                                                                    [problem.id]: !prev[problem.id]
+                                                                                }));
+                                                                            }}
+                                                                            className={`text-xs px-2 py-1 rounded transition-colors ${
+                                                                                showSolution[problem.id]
+                                                                                    ? 'bg-green-500/30 text-green-300'
+                                                                                    : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600'
+                                                                            }`}
+                                                                        >
+                                                                            {showSolution[problem.id] ? '해답 숨기기' : '해답 보기'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <span className={`text-xs px-2 py-0.5 rounded ${
-                                                                problem.type === 'coding' ? 'bg-blue-500/20 text-blue-300' :
-                                                                problem.type === 'quiz' ? 'bg-purple-500/20 text-purple-300' :
-                                                                'bg-orange-500/20 text-orange-300'
-                                                            }`}>
-                                                                {problem.type}
-                                                            </span>
-                                                        </Link>
+                                                            {showSolution[problem.id] && problem.solution && (
+                                                                <div className="px-3 pb-3 space-y-2 border-t border-neutral-800">
+                                                                    <div className="pt-2">
+                                                                        <h5 className="text-xs font-semibold text-green-400 mb-1">💡 정답 코드</h5>
+                                                                        <pre className="text-xs bg-neutral-950 p-2 rounded overflow-x-auto text-neutral-200">
+                                                                            <code>{problem.solution}</code>
+                                                                        </pre>
+                                                                    </div>
+                                                                    {problem.explanation && (
+                                                                        <div>
+                                                                            <h5 className="text-xs font-semibold text-blue-400 mb-1">📝 풀이 설명</h5>
+                                                                            <p className="text-xs text-neutral-400 whitespace-pre-wrap">{problem.explanation}</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     ))}
                                                 </div>
+                                            ) : weekErrors[week.week_number] ? (
+                                                <p className="text-xs text-red-400 text-center py-2">
+                                                    {weekErrors[week.week_number]}
+                                                </p>
                                             ) : (
                                                 <p className="text-xs text-neutral-500 text-center py-2">
                                                     아직 생성된 문제가 없습니다. "문제 생성" 버튼을 클릭하세요.

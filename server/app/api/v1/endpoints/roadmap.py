@@ -5,10 +5,13 @@ Generates personalized learning roadmaps based on gap analysis.
 Now includes Claude Agent integration for intelligent roadmap and problem generation.
 Supports PostgreSQL database for authenticated users.
 """
+import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Literal
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -86,19 +89,22 @@ class ProblemResponse(BaseModel):
     title: str
     description: str
     difficulty: Literal["easy", "medium", "hard"]
-    problem_type: Literal["coding", "quiz", "practical"]
+    type: Literal["coding", "quiz", "practical"]  # Frontend expects 'type'
     skill: str
     hints: List[str] = []
     test_cases: List[dict] = []
     starter_code: Optional[str] = None
+    language: str = "python"
+    solution: Optional[str] = None
+    explanation: Optional[str] = None
 
 
 class GenerateProblemsRequest(BaseModel):
     """Request to generate problems for a week."""
     week_number: int
-    focus_skills: List[str]
+    skills: List[str]  # Frontend sends 'skills'
+    count: int = 3  # Frontend sends 'count'
     learning_objectives: List[str] = []
-    num_problems: int = 3
 
 
 class EvaluateSolutionRequest(BaseModel):
@@ -288,26 +294,47 @@ async def generate_roadmap_with_agent(
 async def generate_problems(request: GenerateProblemsRequest):
     """
     Generate practice problems for a week using Claude Agent.
-    
+
     - **week_number**: Week number in the roadmap
-    - **focus_skills**: Skills to focus on
+    - **skills**: Skills to focus on
+    - **count**: Number of problems to generate
     - **learning_objectives**: Week's learning objectives
-    - **num_problems**: Number of problems to generate
     """
+    import asyncio
+
     try:
         from app.agents.problem_generator import get_problem_generator
-        
+
         generator = get_problem_generator()
-        
-        all_problems = []
-        for skill in request.focus_skills[:2]:  # Limit to 2 skills
-            problems = await generator.generate_problems(
+
+        skills_to_use = request.skills[:2] if request.skills else []  # Limit to 2 skills
+        count_per_skill = max(1, request.count // len(request.skills)) if request.skills else 1
+
+        # Parallel API calls for faster generation
+        tasks = [
+            generator.generate_problems(
                 skill=skill,
                 difficulty="medium",
                 problem_type="coding",
-                count=max(1, request.num_problems // len(request.focus_skills))
+                count=count_per_skill
             )
-            all_problems.extend(problems)
+            for skill in skills_to_use
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        all_problems = []
+        errors = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Problem generation error: {result}")
+                errors.append(str(result))
+                continue  # Skip failed generations
+            all_problems.extend(result)
+        
+        # 모든 task가 실패하고 문제가 없으면 에러 반환
+        if not all_problems and errors:
+            raise HTTPException(status_code=500, detail=f"문제 생성 실패: {'; '.join(errors)}")
         
         # Store problems
         for p in all_problems:
@@ -319,11 +346,14 @@ async def generate_problems(request: GenerateProblemsRequest):
                 title=p.title,
                 description=p.description,
                 difficulty=p.difficulty,
-                problem_type=p.problem_type,
+                type=p.problem_type,
                 skill=p.skill,
+                language=p.language or "python",
                 hints=p.hints,
                 test_cases=p.test_cases,
                 starter_code=p.starter_code,
+                solution=p.solution,
+                explanation=p.explanation,
             )
             for p in all_problems
         ]
@@ -367,10 +397,20 @@ async def evaluate_solution_legacy(problem_id: str, request: EvaluateSolutionReq
     )
 
 
+class ProblemInfo(BaseModel):
+    """Problem information for evaluation."""
+    title: str
+    description: str
+    skill: Optional[str] = None
+    difficulty: Optional[str] = None
+    hints: Optional[List[str]] = None
+
+
 class EvaluateSolutionRequestUnified(BaseModel):
     """Request to evaluate a user's solution (unified)."""
     problem_id: str
     solution: str
+    problem: Optional[ProblemInfo] = None  # Frontend에서 전달받은 문제 정보
 
 
 @router.post("/evaluate")
@@ -380,13 +420,30 @@ async def evaluate_solution_unified(request: EvaluateSolutionRequestUnified):
 
     Returns detailed feedback and score.
     """
-    if request.problem_id not in problems_store:
+    # 서버에 문제가 있으면 사용, 없으면 Frontend에서 전달받은 정보 사용
+    problem = None
+    if request.problem_id in problems_store:
+        problem = problems_store[request.problem_id]
+    elif request.problem is None:
         raise HTTPException(status_code=404, detail="Problem not found")
 
     try:
-        from app.agents.problem_generator import get_problem_generator
+        from app.agents.problem_generator import get_problem_generator, GeneratedProblem
 
-        problem = problems_store[request.problem_id]
+        # 서버에 저장된 문제 또는 Frontend에서 전달받은 문제 사용
+        if problem is None and request.problem:
+            # Frontend에서 전달받은 정보로 임시 문제 객체 생성
+            problem = GeneratedProblem(
+                id=request.problem_id,
+                title=request.problem.title,
+                description=request.problem.description,
+                difficulty=request.problem.difficulty or "medium",
+                problem_type="coding",
+                skill=request.problem.skill or "general",
+                hints=request.problem.hints or [],
+                test_cases=[],
+            )
+
         generator = get_problem_generator()
 
         result = await generator.evaluate_solution(

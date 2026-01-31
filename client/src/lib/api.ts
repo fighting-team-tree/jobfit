@@ -385,6 +385,8 @@ export interface Problem {
   hints?: string[];
   skill?: string;
   week_number?: number;
+  solution?: string;
+  explanation?: string;
 }
 
 export interface EvaluationResult {
@@ -418,12 +420,23 @@ export const problemAPI = {
 
   /**
    * Evaluate a solution for a problem
+   * @param problem - 문제 정보 (서버에 문제가 없을 경우 사용)
    */
-  async evaluateSolution(problemId: string, code: string): Promise<EvaluationResult> {
+  async evaluateSolution(problemId: string, code: string, problem?: Problem): Promise<EvaluationResult> {
     const response = await fetch(`${API_BASE_URL}/roadmap/evaluate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problem_id: problemId, solution: code }),
+      body: JSON.stringify({
+        problem_id: problemId,
+        solution: code,
+        problem: problem ? {
+          title: problem.title,
+          description: problem.description,
+          skill: problem.skill,
+          difficulty: problem.difficulty,
+          hints: problem.hints,
+        } : undefined,
+      }),
       ...fetchOptions,
     });
     return handleResponse<EvaluationResult>(response);
