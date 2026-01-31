@@ -56,8 +56,12 @@ jobfit/
 │           ├── api.ts      # API 클라이언트
 │           └── store.ts    # Zustand 스토어
 │
-└── .agent/                 # AI Agent 설정
-    └── skills/             # Agent 스킬 정의
+├── .agent/                 # AI Agent 설정 (Gemini, Codex)
+│   └── skills/             # Agent 스킬 정의
+│
+└── .claude/                # Claude Code 설정
+    ├── commands/           # 슬래시 명령어
+    └── rules/              # 프로젝트 규칙
 ```
 
 ---
@@ -146,4 +150,76 @@ curl -X POST http://localhost:8000/api/v1/analyze/resume/file \
 curl -X POST http://localhost:8000/api/v1/analyze/jd/url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/job"}'
+```
+
+---
+
+## Claude Code 슬래시 명령어
+
+`.claude/commands/` 디렉토리에 정의된 명령어입니다:
+
+### 서버 관리
+| 명령어 | 설명 |
+|--------|------|
+| `/setup` | 프로젝트 초기 설정 (환경변수, 의존성) |
+| `/start-server` | Backend 서버 시작 (port 8000) |
+| `/start-client` | Frontend 개발 서버 시작 (port 5173) |
+
+### API 테스트
+| 명령어 | 설명 |
+|--------|------|
+| `/test-resume` | 이력서 분석 API 테스트 |
+| `/test-jd` | JD 스크래핑 테스트 |
+| `/gap-analysis` | 갭 분석 실행 |
+| `/company-analyze` | 회사별 매칭 분석 (Claude Agent) |
+
+### 학습 & GitHub
+| 명령어 | 설명 |
+|--------|------|
+| `/roadmap` | 학습 로드맵 생성 |
+| `/git-push` | GitHub 솔루션 푸시 |
+
+### 개발 도구
+| 명령어 | 설명 |
+|--------|------|
+| `/lint` | 코드 린트 검사 (ESLint, Ruff) |
+
+---
+
+## Claude Code 규칙 (Rules)
+
+`.claude/rules/` 디렉토리에 정의된 규칙입니다:
+
+| 파일 | 내용 |
+|------|------|
+| `01-korean.md` | 한국어 우선 커뮤니케이션 |
+| `02-python-uv.md` | Python uv 패키지 관리 필수 |
+| `03-git-convention.md` | Git 커밋 컨벤션 (feat, fix, docs...) |
+| `04-security.md` | PII 마스킹, API 키 보안 |
+| `05-project-structure.md` | 디렉토리 구조 및 핵심 파일 |
+| `06-api-patterns.md` | API 엔드포인트 패턴 |
+| `07-claude-agent.md` | LangGraph 에이전트 규칙 |
+| `08-embedding-matching.md` | 임베딩 기반 스킬 매칭 |
+
+---
+
+## Claude Agent 아키텍처
+
+`server/app/agents/` 디렉토리의 LangGraph 기반 에이전트:
+
+### JobMatchingAgent
+```
+JD 분석 → 스킬 추출 → 스킬 매칭 → 점수 계산
+```
+- 모델: `claude-sonnet-4-20250514`
+- 점수: 필수(70%) + 우대(20%) + 경험(10%)
+
+### RoadmapAgent
+```
+부족 스킬 → 주차별 계획 → 문제 생성 → 솔루션
+```
+
+### ProblemGenerator
+```
+주차 계획 → 연습 문제 (coding/quiz/practical)
 ```

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Upload, Mic, BookOpen, ChevronRight, Github } from 'lucide-react'
+import { Upload, Mic, BookOpen, ChevronRight, Github, Building2 } from 'lucide-react'
+import { LoginButton } from './components/auth'
 
 function App() {
   return (
@@ -15,11 +16,14 @@ function App() {
           </div>
           <nav className="flex items-center gap-6 text-sm font-medium text-neutral-400">
             <Link to="/" className="hover:text-white transition-colors">홈</Link>
+            <Link to="/dashboard" className="hover:text-white transition-colors">대시보드</Link>
+            <Link to="/companies" className="hover:text-white transition-colors">기업 매칭</Link>
             <Link to="/interview" className="hover:text-white transition-colors">실전 면접</Link>
             <Link to="/roadmap" className="hover:text-white transition-colors">학습 로드맵</Link>
             <a href="https://github.com" target="_blank" className="hover:text-white transition-colors">
               <Github className="w-5 h-5" />
             </a>
+            <LoginButton />
           </nav>
         </div>
       </header>
@@ -43,7 +47,7 @@ function App() {
           </p>
 
           {/* Action Cards */}
-          <div className="grid md:grid-cols-3 gap-6 text-left">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
             <Link to="/profile" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Upload className="w-6 h-6 text-blue-400" />
@@ -80,6 +84,19 @@ function App() {
               </h3>
               <p className="text-neutral-400 text-sm">
                 분석된 갭을 채우기 위한 주차별 학습 계획을 자동으로 생성합니다.
+              </p>
+            </Link>
+
+            <Link to="/companies" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all group cursor-pointer">
+              <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Building2 className="w-6 h-6 text-orange-400" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                기업 매칭
+                <ChevronRight className="w-4 h-4 text-neutral-500 group-hover:translate-x-1 transition-transform" />
+              </h3>
+              <p className="text-neutral-400 text-sm">
+                여러 기업의 채용공고를 등록하고 Claude AI로 매칭 분석을 받아보세요.
               </p>
             </Link>
           </div>

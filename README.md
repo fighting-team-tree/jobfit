@@ -113,10 +113,14 @@ jobfit/
 │   └── main.py
 │
 ├── data/                   # 샘플 데이터
-├── .agent/                 # AI Agent 컨텍스트
+├── .agent/                 # AI Agent 컨텍스트 (Gemini, Codex 등)
 │   ├── skills/             # Agent 스킬
 │   ├── rules/              # Agent 규칙
 │   └── workflows/          # 워크플로우
+│
+├── .claude/                # Claude Code 설정
+│   ├── commands/           # 슬래시 명령어
+│   └── rules/              # 프로젝트 규칙
 │
 ├── pyproject.toml          # Python 의존성
 └── README.md
@@ -169,6 +173,37 @@ curl -X POST http://localhost:8000/api/v1/analyze/jd/url \
 curl -X POST http://localhost:8000/api/v1/analyze/gap \
   -H "Content-Type: application/json" \
   -d '{"profile": {...}, "jd_text": "..."}'
+```
+
+---
+
+## 🤖 Claude Code 슬래시 명령어
+
+Claude Code 사용 시 다음 명령어를 활용할 수 있습니다:
+
+| 명령어 | 설명 |
+|--------|------|
+| `/setup` | 프로젝트 초기 설정 가이드 |
+| `/start-server` | Backend 서버 시작 |
+| `/start-client` | Frontend 개발 서버 시작 |
+| `/test-resume` | 이력서 분석 API 테스트 |
+| `/test-jd` | JD 스크래핑 테스트 |
+| `/gap-analysis` | 갭 분석 실행 |
+| `/company-analyze` | 회사별 매칭 분석 (Claude Agent) |
+| `/roadmap` | 학습 로드맵 생성 |
+| `/git-push` | GitHub 솔루션 푸시 |
+| `/lint` | 코드 린트 검사 |
+
+### 설정 파일 위치
+```
+.claude/
+├── settings.local.json     # 로컬 권한 설정
+├── commands/               # 슬래시 명령어 정의
+└── rules/                  # 프로젝트 규칙
+    ├── 01-korean.md        # 한국어 우선
+    ├── 02-python-uv.md     # uv 패키지 관리
+    ├── 03-git-convention.md # Git 컨벤션
+    └── ...
 ```
 
 ---

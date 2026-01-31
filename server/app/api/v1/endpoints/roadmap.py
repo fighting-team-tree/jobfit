@@ -3,20 +3,34 @@ Roadmap API Endpoints
 
 Generates personalized learning roadmaps based on gap analysis.
 Now includes Claude Agent integration for intelligent roadmap and problem generation.
+Supports PostgreSQL database for authenticated users.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Literal
 from datetime import datetime, timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 from app.services.nvidia_service import nvidia_service
+from app.core.database import get_db
+from app.core.auth import get_optional_user
+from app.models.user import ReplitUser, OptionalUser
+from app.models.db_models import Roadmap as RoadmapModel
+from app.services.user_service import get_or_create_user
 
 router = APIRouter()
 
 
-# ============ In-Memory Storage ============
+# ============ In-Memory Storage (Fallback) ============
 roadmaps_store: dict = {}
 problems_store: dict = {}
+
+
+def use_database(db: Optional[AsyncSession], user: OptionalUser) -> bool:
+    """Check if we should use database mode."""
+    return db is not None and user.is_authenticated
 
 
 # ============ Request/Response Models ============
@@ -195,20 +209,24 @@ async def generate_roadmap(request: RoadmapRequest):
 
 
 @router.post("/generate/agent")
-async def generate_roadmap_with_agent(request: AgentRoadmapRequest):
+async def generate_roadmap_with_agent(
+    request: AgentRoadmapRequest,
+    user: OptionalUser = Depends(get_optional_user),
+    db: Optional[AsyncSession] = Depends(get_db),
+):
     """
     Generate a learning roadmap using Claude Agent.
-    
+
     - **missing_skills**: Skills to learn
     - **timeline_weeks**: Number of weeks
     - **target_role**: Target job role
     - **current_level**: Current skill level
-    
+
     Returns AI-generated weekly plans with detailed objectives.
     """
     try:
         from app.agents.roadmap_agent import get_roadmap_agent
-        
+
         agent = get_roadmap_agent()
         roadmap = await agent.generate_roadmap(
             missing_skills=request.missing_skills,
@@ -216,11 +234,8 @@ async def generate_roadmap_with_agent(request: AgentRoadmapRequest):
             target_role=request.target_role,
             current_level=request.current_level
         )
-        
-        # Store roadmap for later reference
-        roadmaps_store[roadmap.id] = roadmap
-        
-        return {
+
+        roadmap_data = {
             "id": roadmap.id,
             "title": roadmap.title,
             "description": roadmap.description,
@@ -239,7 +254,30 @@ async def generate_roadmap_with_agent(request: AgentRoadmapRequest):
             "missing_skills": roadmap.missing_skills,
             "target_role": roadmap.target_role,
         }
-        
+
+        # Save to database if authenticated
+        if use_database(db, user):
+            replit_user = ReplitUser(user_id=user.user_id, username=user.username)
+            await get_or_create_user(db, replit_user)
+
+            db_roadmap = RoadmapModel(
+                id=roadmap.id,
+                user_id=user.user_id,
+                title=roadmap.title,
+                description=roadmap.description,
+                data=roadmap_data,
+                missing_skills=roadmap.missing_skills,
+                target_role=roadmap.target_role,
+                total_weeks=roadmap.total_weeks,
+            )
+            db.add(db_roadmap)
+            await db.commit()
+        else:
+            # Fallback: In-memory storage
+            roadmaps_store[roadmap.id] = roadmap
+
+        return roadmap_data
+
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:

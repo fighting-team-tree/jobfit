@@ -10,24 +10,26 @@ import InterviewPage from './pages/InterviewPage.tsx'
 import InterviewFeedbackPage from './pages/InterviewFeedbackPage.tsx'
 import RoadmapPage from './pages/RoadmapPage.tsx'
 import CompaniesPage from './pages/CompaniesPage.tsx'
+import { AuthProvider } from './components/auth'
 
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/interview" element={<InterviewPage />} />
-          <Route path="/interview/feedback/:sessionId" element={<InterviewFeedbackPage />} />
-          <Route path="/roadmap" element={<RoadmapPage />} />
-          <Route path="/companies" element={<CompaniesPage />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/interview" element={<InterviewPage />} />
+            <Route path="/interview/feedback/:sessionId" element={<InterviewFeedbackPage />} />
+            <Route path="/roadmap" element={<RoadmapPage />} />
+            <Route path="/companies" element={<CompaniesPage />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,
 )
-

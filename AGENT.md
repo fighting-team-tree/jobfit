@@ -81,6 +81,52 @@ uv run playwright install chromium
 
 ---
 
+## Claude Code 설정 (`.claude/`)
+
+Claude Code 전용 설정 파일입니다.
+
+### 디렉토리 구조
+```
+.claude/
+├── settings.local.json     # 로컬 권한 설정
+├── commands/               # 슬래시 명령어 (10개)
+│   ├── setup.md            # 초기 설정
+│   ├── start-server.md     # 백엔드 시작
+│   ├── start-client.md     # 프론트엔드 시작
+│   ├── test-resume.md      # 이력서 분석 테스트
+│   ├── test-jd.md          # JD 스크래핑 테스트
+│   ├── gap-analysis.md     # 갭 분석
+│   ├── company-analyze.md  # 회사별 분석 (Claude Agent)
+│   ├── roadmap.md          # 로드맵 생성
+│   ├── git-push.md         # GitHub 푸시
+│   └── lint.md             # 코드 린트
+│
+└── rules/                  # 프로젝트 규칙 (8개)
+    ├── 01-korean.md        # 한국어 우선
+    ├── 02-python-uv.md     # uv 패키지 관리
+    ├── 03-git-convention.md # Git 컨벤션
+    ├── 04-security.md      # 보안 & PII
+    ├── 05-project-structure.md # 프로젝트 구조
+    ├── 06-api-patterns.md  # API 패턴
+    ├── 07-claude-agent.md  # Claude Agent 규칙
+    └── 08-embedding-matching.md # 임베딩 매칭
+```
+
+### 슬래시 명령어 사용법
+
+```
+/setup              # 프로젝트 초기 설정 가이드
+/start-server       # cd server && uv run uvicorn main:app --reload
+/start-client       # cd client && npm run dev
+/test-resume        # 이력서 분석 curl 테스트
+/gap-analysis       # 갭 분석 실행
+/company-analyze    # Claude Agent로 회사별 매칭
+/roadmap            # 학습 로드맵 생성
+/lint               # 코드 린트 (ESLint, Ruff)
+```
+
+---
+
 ## API 엔드포인트 요약
 
 ### 분석 API (`/api/v1/analyze`)
@@ -120,9 +166,30 @@ uv run playwright install chromium
 
 ## 현재 구현 상태
 
+### 완료
 - [x] 이력서 파싱 (텍스트/파일)
 - [x] JD URL 스크래핑 (httpx + Playwright)
 - [x] 갭 분석 (가중치 기반)
-- [ ] 학습 로드맵 생성 (진행 중)
-- [ ] AI 면접 연습 (진행 중)
-- [ ] GitHub 프로필 분석 (기본 구현)
+- [x] 역량 레이더 차트 (Recharts)
+- [x] Claude Agent 시스템 (LangGraph)
+  - [x] JobMatchingAgent (채용 매칭)
+  - [x] RoadmapAgent (로드맵 생성)
+  - [x] ProblemGenerator (문제 생성)
+- [x] Companies 탭 (멀티 회사 관리)
+- [x] GitHub 연동 (Git Push Service)
+
+### 진행 중
+- [ ] 학습 로드맵 UI 개선
+- [ ] AI 면접 연습 (ElevenLabs 음성)
+- [ ] GitHub 프로필 분석 심화
+
+---
+
+## Claude Agent 파일
+
+| 파일 | 역할 |
+|------|------|
+| `server/app/agents/matching_agent.py` | 채용 매칭 (LangGraph) |
+| `server/app/agents/roadmap_agent.py` | 로드맵 생성 |
+| `server/app/agents/problem_generator.py` | 문제 생성 |
+| `server/app/services/git_push_service.py` | GitHub 푸시 |
