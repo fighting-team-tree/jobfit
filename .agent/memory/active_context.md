@@ -5,6 +5,9 @@
 - **Goal:** Implementing core AI features (Resume Analysis & Voice Interview).
 
 ## Recent Actions
+- **Git & Collaboration:**
+  - Defined Git Commit Convention and Branch Strategy (`rules/git_branch_strategy.md`).
+  - Created and switched to `dev` branch for integration.
 - **Structure:**
   - Created Domain-Driven folder structure for Server (`endpoints`, `services`, `schemas`).
   - Created Feature-Based folder structure for Client (`features`, `hooks`, `store`).
