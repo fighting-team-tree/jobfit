@@ -58,6 +58,8 @@ uv run playwright install chromium
 | 파일 | 역할 |
 |------|------|
 | `server/app/services/nvidia_service.py` | NVIDIA LLM 연동, 갭 분석 |
+| `server/app/services/embedding_service.py` | NVIDIA 임베딩, 스킬 벡터화 |
+| `server/app/services/skill_matcher_service.py` | 벡터 유사도 기반 스킬 매칭 |
 | `server/app/services/resume_parser_service.py` | 이력서 파싱 (VLM) |
 | `server/app/services/jd_scraper_service.py` | JD URL 스크래핑 |
 | `server/app/api/v1/endpoints/analysis.py` | 분석 API 엔드포인트 |

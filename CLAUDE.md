@@ -97,13 +97,12 @@ ELEVENLABS_API_KEY=...
 
 ---
 
-## 갭 분석 프롬프트 구조
+## 갭 분석 아키텍처 (Hybrid Approach)
 
-`nvidia_service.py`의 `analyze_gap` 메서드:
-1. JD에서 **필수/우대 요건** 분리 추출
-2. 프로필에서 **실제 언급된 기술만** 추출
-3. **1:1 매칭** (동의어 인정, 상위 개념 불인정)
-4. **가중치 점수**: 필수 70% + 우대 30%
+`nvidia_service.py` (`analyze_gap`):
+1. **Extraction (LLM)**: Temperature 0 적용, 스킬 리스트 JSON 추출
+2. **Matching (Embedding)**: `skill_matcher_service.py` 사용 (NV-Embed + Cosine Similarity)
+3. **Scoring**: 필수(70%) + 우대(30%) 가중치 계산 (결정적 산출)
 
 ---
 
