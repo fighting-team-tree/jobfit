@@ -3,17 +3,18 @@
 - **Goal:** Testing and verifying NVIDIA NIM (Nemotron-Parse) API for resume parsing.
 
 ## Recent Actions
+- **NVIDIA Model Testing:**
+  - Created `tests/test_nvidia_parse.py` for experimental testing of **Nemotron-Parse 1.1**.
+  - Implemented Base64 image encoding and API call logic with `httpx`.
+  - Added PII masking logic (Email, Phone) using Regex according to security rules.
+  - Added `Pillow` dependency for image processing.
 - **Git & Collaboration:**
-  - Created `test/nvidia-model` branch for experimental testing of NVIDIA VLM models.
-  - Synchronized `dev` branch with `main`.
-  - Defined Git Commit Convention and Branch Strategy.
+  - Created `test/nvidia-model` branch.
 - **Structure:**
-  - Created Domain-Driven folder structure for Server (`endpoints`, `services`, `schemas`).
-  - Created Feature-Based folder structure for Client (`features`, `hooks`, `store`).
-  - Implemented `server/main.py` with CORS and Basic Router.
+  - Created `tests/` directory for experimental scripts.
 
 ## Next Steps
-- Create an experimental script to call NVIDIA NIM Nemotron-Parse 1.1 API.
-- Test with sample resume images/PDFs.
-- Evaluate parsing accuracy and latency.
-- Implement PII masking logic in the test script.
+- Provide or generate a sample resume image/PDF for testing.
+- Run `tests/test_nvidia_parse.py` with the sample file.
+- Verify the quality of Markdown output and PII masking accuracy.
+- Prepare `server/app/services/nvidia_service.py` based on test results.
