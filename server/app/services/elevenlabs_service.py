@@ -6,7 +6,6 @@ Handles WebSocket streaming with ElevenLabs Conversational AI for low-latency TT
 import asyncio
 from typing import AsyncGenerator, Optional
 from elevenlabs import ElevenLabs
-from elevenlabs.conversational_ai.conversation import Conversation
 from app.core.config import settings
 
 
@@ -42,11 +41,11 @@ class ElevenLabsService:
         
         try:
             # Use streaming for low latency
-            audio_stream = self.client.text_to_speech.convert_as_stream(
+            audio_stream = self.client.text_to_speech.convert(
                 text=text,
                 voice_id=selected_voice,
                 model_id="eleven_turbo_v2_5",  # Fastest model
-                output_format="mp3_44100_128"
+                output_format="mp3_44100_128",
             )
             
             for chunk in audio_stream:
@@ -85,6 +84,23 @@ class ElevenLabsService:
         except Exception as e:
             print(f"Error fetching voices: {e}")
             return []
+            
+    async def get_signed_url(self, agent_id: str) -> str:
+        """Get a signed URL for connecting to a Conversational Agent securely."""
+        import httpx
+        
+        if not self.api_key:
+             raise ValueError("ElevenLabs API key not configured")
+
+        url = f"https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id={agent_id}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url, 
+                headers={"xi-api-key": self.api_key}
+            )
+            response.raise_for_status()
+            return response.json()["signed_url"]
 
 
 # Singleton instance

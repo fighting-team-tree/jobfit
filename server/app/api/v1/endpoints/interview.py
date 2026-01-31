@@ -84,13 +84,18 @@ async def start_interview(request: StartInterviewRequest):
     
     # Generate first question
     try:
+        print(f"[Interview] Generating first question for Profile: {request.profile.get('skills')}")
         first_question = await nvidia_service.generate_interview_question(
             profile=request.profile,
             jd_text=request.jd_text,
             conversation_history=[],
             persona=request.persona
         )
-        
+    except Exception as e:
+        print(f"[Interview] NVIDIA generation failed: {e}. Using fallback question.")
+        first_question = "자기소개와 함께 이번 지원하신 동기에 대해 말씀해 주시겠습니까? (Fallback: AI 생성 실패)"
+
+    try:
         session.conversation_history.append({
             "role": "interviewer",
             "content": first_question,
@@ -109,6 +114,7 @@ async def start_interview(request: StartInterviewRequest):
         }
         
     except Exception as e:
+        print(f"[Interview] Error storing session: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start interview: {str(e)}")
 
 
@@ -217,146 +223,286 @@ async def get_interview_feedback(session_id: str):
     )
 
 
+@router.post("/test-tts")
+async def test_tts_endpoint(text: str = "마이크 테스트 하나 둘 셋"):
+    """
+    Test TTS generation directly.
+    Returns audio/mpeg as complete bytes (non-streaming for reliability).
+    """
+    from fastapi.responses import Response
+    import traceback
+
+    print(f"[TTS] Received request with text: {text[:50]}...")
+
+    try:
+        # Collect all audio chunks first for reliable delivery
+        audio_chunks = []
+        print("[TTS] Starting to collect audio chunks...")
+        
+        async for chunk in elevenlabs_service.text_to_speech_stream(text):
+            audio_chunks.append(chunk)
+            print(f"[TTS] Received chunk: {len(chunk)} bytes")
+        
+        print(f"[TTS] Total chunks: {len(audio_chunks)}")
+        
+        if not audio_chunks:
+            print("[TTS] ERROR: No audio chunks received")
+            raise HTTPException(status_code=500, detail="No audio generated")
+        
+        audio_bytes = b"".join(audio_chunks)
+        print(f"[TTS] Total audio size: {len(audio_bytes)} bytes")
+        
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Length": str(len(audio_bytes)),
+                "Content-Disposition": "inline; filename=tts_output.mp3"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[TTS] Exception: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============ WebSocket Endpoint ============
+
 # ============ WebSocket Endpoint ============
 
 @router.websocket("/ws/{session_id}")
 async def interview_websocket(websocket: WebSocket, session_id: str):
     """
-    Real-time interview WebSocket connection.
+    Real-time Full-Duplex Interview WebSocket.
     
-    Message format (client -> server):
-    {
-        "type": "answer",
-        "content": "사용자 답변 텍스트"
-    }
-    
-    Message format (server -> client):
-    {
-        "type": "question" | "audio" | "status" | "error",
-        "content": "질문/상태 텍스트",
-        "audio_base64": "base64 encoded audio (for audio type)"
-    }
+    - Client sends: Binary Audio (PCM 16kHz)
+    - Server sends: JSON Control Actions + Audio (Base64)
     """
     await websocket.accept()
     
     if session_id not in active_sessions:
-        await websocket.send_json({
-            "type": "error",
-            "content": "Session not found. Please start a new interview."
-        })
-        await websocket.close()
+        await websocket.close(code=4000, reason="Session not found")
         return
     
     session = active_sessions[session_id]
     
-    try:
-        # Send initial status
+    # State flags
+    import asyncio
+    from app.services.stt_service import stt_service
+    
+    audio_queue = asyncio.Queue()
+    current_transcript = []
+    is_ai_speaking = False
+    interrupt_event = asyncio.Event()
+
+    # --- Callbacks for STT Service ---
+    
+    async def on_speech_started():
+        """Barge-in: User started speaking, interrupt AI."""
+        nonlocal is_ai_speaking
+        if is_ai_speaking:
+            print(f"Barge-in detected! Stopping TTS for session {session_id}")
+            interrupt_event.set() # Signal TTS loop to stop
+            
+            # Notify client to stop playback
+            await websocket.send_json({
+                "type": "interrupted",
+                "content": "Listening..."
+            })
+            is_ai_speaking = False
+
+    async def on_transcript(text: str, is_final: bool):
+        """Received transcript from STT."""
+        # Send interim transcript to client for UI feedback
         await websocket.send_json({
-            "type": "status",
-            "content": "면접이 시작되었습니다. 질문을 보내드립니다."
+            "type": "transcript",
+            "role": "user",
+            "content": text,
+            "is_final": is_final
         })
         
-        # Send first question with audio
-        if session.conversation_history:
-            last_question = session.conversation_history[-1]["content"]
+        if is_final:
+            current_transcript.append(text)
+
+    async def on_utterance_end():
+        """User finished speaking (Silence detected). Process response."""
+        full_text = " ".join(current_transcript).strip()
+        current_transcript.clear()
+        
+        if not full_text:
+            return # Ignore empty noise
             
-            # Send text first
+        print(f"User said: {full_text}")
+        
+        # 1. Update Session History
+        session.conversation_history.append({
+            "role": "candidate",
+            "content": full_text,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # 2. Check End Condition
+        if session.question_count >= session.max_questions:
+            session.ended_at = datetime.now().isoformat()
+            await websocket.send_json({
+                "type": "status",
+                "content": "면접이 종료되었습니다. 수고하셨습니다!",
+                "status": "completed"
+            })
+            return
+
+        # 3. Generate AI Response (LLM)
+        await websocket.send_json({"type": "status", "content": "생각 중..."})
+        
+        try:
+            next_question = await nvidia_service.generate_interview_question(
+                profile=session.profile,
+                jd_text=session.jd_text,
+                conversation_history=session.conversation_history,
+                persona=session.persona
+            )
+            
+            # Update History
+            session.conversation_history.append({
+                "role": "interviewer",
+                "content": next_question,
+                "timestamp": datetime.now().isoformat()
+            })
+            session.question_count += 1
+            
+            # Send Text Question
             await websocket.send_json({
                 "type": "question",
-                "content": last_question,
+                "content": next_question,
                 "question_number": session.question_count
             })
             
-            # Stream audio
-            try:
-                async for audio_chunk in elevenlabs_service.text_to_speech_stream(
-                    last_question,
-                    persona=session.persona
-                ):
-                    await websocket.send_json({
-                        "type": "audio",
-                        "audio_base64": base64.b64encode(audio_chunk).decode()
-                    })
-            except Exception as e:
-                print(f"Audio streaming error: {e}")
-        
-        # Listen for answers
-        while True:
-            data = await websocket.receive_json()
+            # 4. Stream TTS (ElevenLabs)
+            await stream_tts_response(next_question)
             
-            if data.get("type") == "answer":
-                answer = data.get("content", "")
-                
-                # Record answer
-                session.conversation_history.append({
-                    "role": "candidate",
-                    "content": answer,
-                    "timestamp": datetime.now().isoformat()
-                })
-                
-                # Check if interview should end
-                if session.question_count >= session.max_questions:
-                    session.ended_at = datetime.now().isoformat()
-                    await websocket.send_json({
-                        "type": "status",
-                        "content": "면접이 종료되었습니다. 수고하셨습니다!"
-                    })
+        except Exception as e:
+            print(f"Error generating response: {e}")
+            await websocket.send_json({"type": "error", "content": str(e)})
+
+    async def stream_tts_response(text: str):
+        """Stream TTS audio to client, respecting interruption."""
+        nonlocal is_ai_speaking
+        is_ai_speaking = True
+        interrupt_event.clear()
+        
+        try:
+            async for audio_chunk in elevenlabs_service.text_to_speech_stream(
+                text, persona=session.persona
+            ):
+                if interrupt_event.is_set():
+                    print("TTS Interrupted locally.")
                     break
                 
-                # Generate next question
                 await websocket.send_json({
-                    "type": "status",
-                    "content": "답변을 분석하고 있습니다..."
+                    "type": "audio",
+                    "audio_base64": base64.b64encode(audio_chunk).decode()
                 })
-                
-                next_question = await nvidia_service.generate_interview_question(
-                    profile=session.profile,
-                    jd_text=session.jd_text,
-                    conversation_history=session.conversation_history,
-                    persona=session.persona
-                )
-                
-                session.conversation_history.append({
-                    "role": "interviewer",
-                    "content": next_question,
-                    "timestamp": datetime.now().isoformat()
-                })
-                session.question_count += 1
-                
-                # Send question
-                await websocket.send_json({
-                    "type": "question",
-                    "content": next_question,
-                    "question_number": session.question_count
-                })
-                
-                # Stream audio
-                try:
-                    async for audio_chunk in elevenlabs_service.text_to_speech_stream(
-                        next_question,
-                        persona=session.persona
-                    ):
-                        await websocket.send_json({
-                            "type": "audio",
-                            "audio_base64": base64.b64encode(audio_chunk).decode()
-                        })
-                except Exception as e:
-                    print(f"Audio streaming error: {e}")
-            
-            elif data.get("type") == "end":
-                session.ended_at = datetime.now().isoformat()
-                await websocket.send_json({
-                    "type": "status",
-                    "content": "면접이 종료되었습니다."
-                })
+        except Exception as e:
+            print(f"TTS Streaming error: {e}")
+        finally:
+            is_ai_speaking = False
+            # Send "finished speaking" marker if needed?
+
+    # --- Main Loops ---
+
+    async def audio_feed_generator():
+        """Yields audio chunks from queue for STT service."""
+        while True:
+            chunk = await audio_queue.get()
+            if chunk is None: # Sentinel
                 break
+            yield chunk
+
+    async def receive_loop():
+        """Receive WebSocket messages (Audio/JSON)."""
+        try:
+            while True:
+                message = await websocket.receive()
+                
+                if "bytes" in message:
+                    # Binary Audio
+                    await audio_queue.put(message["bytes"])
+                    
+                elif "text" in message:
+                    # JSON Control
+                    try:
+                        data = json.loads(message["text"])
+                        if data.get("type") == "cancel":
+                            # Manual cancel
+                            await on_speech_started()
+                    except:
+                        pass
+                        
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            print(f"WS Receiver Error: {e}")
+        finally:
+            await audio_queue.put(None) # Stop STT loop logic if needed
+
+    # --- Start Execution ---
     
-    except WebSocketDisconnect:
-        print(f"WebSocket disconnected for session {session_id}")
-    except Exception as e:
+    try:
+        # 1. Send Welcome / First Question
         await websocket.send_json({
-            "type": "error",
-            "content": f"Error: {str(e)}"
+            "type": "status",
+            "content": "면접을 시작합니다. 목소리가 들리면 대답해주세요."
         })
+        
+        # If there's already a question pending (from start), say it.
+        if session.conversation_history and session.conversation_history[-1]["role"] == "interviewer":
+            last_q = session.conversation_history[-1]["content"]
+            await websocket.send_json({
+                "type": "question",
+                "content": last_q,
+                "question_number": session.question_count
+            })
+            # Start speaking initially
+            # Use create_task to run TTS without blocking the receive loop!
+            asyncio.create_task(stream_tts_response(last_q))
+
+        # 2. Run STT and Receive Loop Concurrently
+        stt_task = asyncio.create_task(stt_service.transcribe_stream(
+            audio_feed_generator(),
+            on_transcript=on_transcript,
+            on_speech_started=on_speech_started,
+            on_utterance_end=on_utterance_end,
+            language="ko"
+        ))
+        
+        await receive_loop()
+        
+        # Cleanup
+        stt_task.cancel()
+
+
+@router.post("/agent-auth")
+async def get_agent_auth():
+    """Get signed URL for ElevenLabs Agent authentication."""
+    agent_id = settings.ELEVENLABS_AGENT_ID
+    
+    # If using Public Agent, signed_url is not strictly required, but recommended.
+    # If Agent ID is missing, return error/null
+    if not agent_id or agent_id == "your_agent_id":
+         return {"signed_url": None, "agent_id": None, "error": "Agent ID not configured in .env"}
+
+    try:
+        signed_url = await elevenlabs_service.get_signed_url(agent_id)
+        return {"signed_url": signed_url, "agent_id": agent_id}
+    except Exception as e:
+        # If signing fails (e.g. invalid API key), return 500
+        print(f"Agent Auth Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sign URL: {str(e)}")
+        
+    except Exception as e:
+        print(f"WS Session Error: {e}")
     finally:
-        await websocket.close()
+        print(f"Session {session_id} disconnected")
+

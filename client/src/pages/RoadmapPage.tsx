@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
-import { roadmapAPI, type Roadmap, type TodoItem } from '../lib/api';
+import { roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function RoadmapPage() {
@@ -176,8 +176,8 @@ export default function RoadmapPage() {
                                                     <button
                                                         onClick={() => toggleTodo(todo.id)}
                                                         className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${completedTodos.has(todo.id)
-                                                                ? 'bg-emerald-500 border-emerald-500'
-                                                                : 'border-neutral-600 hover:border-emerald-500'
+                                                            ? 'bg-emerald-500 border-emerald-500'
+                                                            : 'border-neutral-600 hover:border-emerald-500'
                                                             }`}
                                                     >
                                                         {completedTodos.has(todo.id) && <CheckCircle className="w-3 h-3 text-white" />}

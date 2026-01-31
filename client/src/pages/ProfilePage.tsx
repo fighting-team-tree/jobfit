@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight } from 'lucide-react';
-import { analysisAPI, type ResumeAnalysis } from '../lib/api';
+import { analysisAPI } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function ProfilePage() {
