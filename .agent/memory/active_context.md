@@ -5,6 +5,10 @@
 - **Goal:** Implementing core AI features (Resume Analysis & Voice Interview).
 
 ## Recent Actions
+- **Git & Collaboration:**
+  - Synchronized `dev` branch with `main`.
+  - Propagated updates to all feature branches (`nvidia-parser`, `elevenlabs-voice`, `dashboard-ui`, `gap-analysis`).
+  - Defined Git Commit Convention and Branch Strategy.
 - **Structure:**
   - Created Domain-Driven folder structure for Server (`endpoints`, `services`, `schemas`).
   - Created Feature-Based folder structure for Client (`features`, `hooks`, `store`).
