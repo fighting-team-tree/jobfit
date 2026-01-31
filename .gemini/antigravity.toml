@@ -1,0 +1,21 @@
+[project]
+name = "JobFit"
+type = "web-application"
+stack = ["python", "typescript", "react", "fastapi"]
+
+[commands]
+start-backend = "uv run uvicorn server.main:app --reload --port 8000"
+start-frontend = "cd client && npm run dev"
+install-backend = "uv sync"
+install-frontend = "cd client && npm install"
+test-backend = "uv run pytest"
+build-frontend = "cd client && npm run build"
+
+[agent]
+context-files = [
+    ".agent/memory/active_context.md",
+    ".agent/memory/tech_spec.md",
+    ".agent/memory/PRD.md"
+]
+rules-dir = ".agent/rules"
+skills-dir = ".agent/skills"
