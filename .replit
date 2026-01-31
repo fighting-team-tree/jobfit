@@ -1,5 +1,5 @@
 modules = ["python-3.11", "nodejs-20"]
-run = "echo 'Please start backend and frontend separately or use a foreman script.'"
+run = "bash start.sh"
 entrypoint = "server/main.py"
 
 [nix]
@@ -7,3 +7,11 @@ channel = "stable-24_05"
 
 [env]
 PYTHONPATH = "$PYTHONPATH:$REPLIT_SOURCE_DIR"
+
+[deployment]
+run = ["bash", "start.sh"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 8000
+externalPort = 80

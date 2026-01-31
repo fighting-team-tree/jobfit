@@ -1,9 +1,16 @@
+import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.init_db import init_db
+
+# Frontend 빌드 경로
+FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "client" / "dist"
 
 
 @asynccontextmanager
@@ -34,6 +41,26 @@ if settings.BACKEND_CORS_ORIGINS:
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
-@app.get("/")
-def root():
-    return {"message": "Welcome to JobFit API", "docs": "/docs"}
+# Frontend 정적 파일 서빙 (Replit 배포용)
+if FRONTEND_BUILD_DIR.exists():
+    # 정적 파일 (JS, CSS, 이미지 등)
+    app.mount("/assets", StaticFiles(directory=FRONTEND_BUILD_DIR / "assets"), name="assets")
+
+    # SPA 라우팅: 모든 경로를 index.html로
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # API 경로는 제외
+        if full_path.startswith("api/"):
+            return {"error": "Not found"}
+
+        # 파일이 존재하면 해당 파일 반환
+        file_path = FRONTEND_BUILD_DIR / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+
+        # 그 외는 index.html 반환 (SPA 라우팅)
+        return FileResponse(FRONTEND_BUILD_DIR / "index.html")
+else:
+    @app.get("/")
+    def root():
+        return {"message": "Welcome to JobFit API", "docs": "/docs"}

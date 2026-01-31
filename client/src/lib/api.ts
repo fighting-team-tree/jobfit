@@ -2,7 +2,9 @@
  * API Client for JobFit Backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// 배포 환경에서는 상대 경로 사용, 로컬 개발에서는 localhost:8000
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 // ============ Types ============
 
