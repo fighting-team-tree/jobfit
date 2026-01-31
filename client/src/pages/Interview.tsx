@@ -1,34 +1,97 @@
-import React, { useState, useRef } from 'react';
-import { Mic, MicOff, MessageSquare, Info, Play, Pause } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, MessageSquare, Info } from 'lucide-react';
 
 const Interview = () => {
     const [isRecording, setIsRecording] = useState(false);
     const [captions, setCaptions] = useState<string>("안녕하세요! 오늘 면접을 진행하게 된 AI 면접관 Sarah입니다. 준비되셨다면 마이크 버튼을 눌러주세요.");
+    const [ws, setWs] = useState<WebSocket | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
-    const toggleRecording = () => {
-        setIsRecording(!isRecording);
-        if (!isRecording) {
-            // Simulate speech-to-text start
-            setCaptions("사용자의 말을 경청하고 있습니다...");
-        } else {
-            // Simulate processing and ElevenLabs response
-            handleServerResponse("흥미롭군요. 그렇다면 본인의 기술적 강점이 실제 팀 프로젝트에서 어떻게 발휘되었는지 구체적인 사례를 들어주실 수 있나요?");
+    // Initial WebSocket Connection
+    useEffect(() => {
+        const socket = new WebSocket('ws://localhost:8000/api/v1/interview/session');
+
+        socket.onopen = () => {
+            console.log('Connected to Interview Session');
+        };
+
+        socket.onmessage = async (event) => {
+            // Handle binary audio data
+            if (event.data instanceof Blob) {
+                const audioUrl = URL.createObjectURL(event.data);
+                if (audioRef.current) {
+                    audioRef.current.src = audioUrl;
+                    audioRef.current.play();
+                }
+            } else {
+                // Handle JSON messages
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'caption') {
+                        setCaptions(message.text);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse message', e);
+                }
+            }
+        };
+
+        socket.onclose = () => console.log('Disconnected');
+
+        setWs(socket);
+
+        return () => {
+            socket.close();
+        };
+    }, []);
+
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                    // Send audio chunk to server (Not fully implemented on server yet, but ready structure)
+                    // ws.send(event.data); 
+                }
+            };
+
+            mediaRecorder.start(100); // Collect 100ms chunks
+            setIsRecording(true);
+            setCaptions("듣고 있습니다...");
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            alert("마이크 접근 권한이 필요합니다.");
         }
     };
 
-    const handleServerResponse = async (text: string) => {
-        setCaptions(text);
-        // In a real app, we would call the server TTS endpoint:
-        // const response = await fetch('/api/v1/interview/tts', { method: 'POST', body: JSON.stringify({ text }) });
-        // const blob = await response.blob();
-        // const url = URL.createObjectURL(blob);
-        // audioRef.current = new Audio(url);
-        // audioRef.current.play();
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+            setIsRecording(false);
+
+            // Send end of turn signal
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'audio_end' }));
+            }
+        }
+    };
+
+    const toggleRecording = () => {
+        if (!isRecording) {
+            startRecording();
+        } else {
+            stopRecording();
+        }
     };
 
     return (
         <div className="container mx-auto px-6 pt-24 pb-12 h-[calc(100vh-64px)] flex flex-col">
+            <audio ref={audioRef} className="hidden" />
             <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden">
 
                 {/* Left: Avatar Section */}
@@ -83,8 +146,8 @@ const Interview = () => {
                         <button
                             onClick={toggleRecording}
                             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${isRecording
-                                    ? 'bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]'
-                                    : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.4)]'
+                                ? 'bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                                : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.4)]'
                                 }`}
                         >
                             {isRecording ? <Mic className="w-8 h-8" /> : <MicOff className="w-8 h-8" />}

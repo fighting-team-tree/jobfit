@@ -44,6 +44,13 @@ class NvidiaService:
             
             # Assuming the model returns JSON in the content
             content = result['choices'][0]['message']['content']
+            
+            # [NeMo Curator Integration] 
+            # Scrub PII from the raw text extracted by VLM before any further processing or storage.
+            # This ensures that even if the VLM extracted personal details, we don't persist them in our structured data.
+            from app.services.privacy_service import privacy_service
+            content = privacy_service.scrub(content)
+
             # Simple cleaning if it returns markdown
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
