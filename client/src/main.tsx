@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage.tsx'
 import InterviewPage from './pages/InterviewPage.tsx'
 import InterviewFeedbackPage from './pages/InterviewFeedbackPage.tsx'
 import RoadmapPage from './pages/RoadmapPage.tsx'
+import ProblemPage from './pages/ProblemPage.tsx'
 import CompaniesPage from './pages/CompaniesPage.tsx'
 import { AuthProvider } from './components/auth'
 
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/interview" element={<InterviewPage />} />
             <Route path="/interview/feedback/:sessionId" element={<InterviewFeedbackPage />} />
             <Route path="/roadmap" element={<RoadmapPage />} />
+            <Route path="/problem/:id" element={<ProblemPage />} />
             <Route path="/companies" element={<CompaniesPage />} />
           </Routes>
         </BrowserRouter>
