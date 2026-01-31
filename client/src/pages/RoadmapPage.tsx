@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
-import { roadmapAPI, type Roadmap, type TodoItem } from '../lib/api';
+import { roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function RoadmapPage() {
@@ -13,13 +13,7 @@ export default function RoadmapPage() {
     const [error, setError] = useState<string | null>(null);
     const [completedTodos, setCompletedTodos] = useState<Set<number>>(new Set());
 
-    useEffect(() => {
-        if (gapAnalysis) {
-            generateRoadmap();
-        }
-    }, [gapAnalysis]);
-
-    const generateRoadmap = async () => {
+    const generateRoadmap = useCallback(async () => {
         if (!gapAnalysis) return;
 
         setIsLoading(true);
@@ -33,7 +27,13 @@ export default function RoadmapPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [gapAnalysis]);
+
+    useEffect(() => {
+        if (gapAnalysis) {
+            generateRoadmap();
+        }
+    }, [gapAnalysis, generateRoadmap]);
 
     const toggleTodo = async (todoId: number) => {
         const newCompleted = new Set(completedTodos);

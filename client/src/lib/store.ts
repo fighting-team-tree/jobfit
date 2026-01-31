@@ -78,27 +78,54 @@ interface Message {
 }
 
 interface InterviewState {
+  sessionId: string | null;
   isActive: boolean;
+  currentQuestion: string;
+  questionNumber: number;
+  totalQuestions: number;
   persona: 'professional' | 'friendly' | 'challenging';
-  messages: Message[];
+  conversation: Message[];
   
   // Actions
-  setIsActive: (active: boolean) => void;
   setPersona: (persona: 'professional' | 'friendly' | 'challenging') => void;
+  startSession: (sessionId: string, totalQuestions: number) => void;
+  setQuestion: (question: string, questionNumber: number) => void;
   addMessage: (role: 'interviewer' | 'user', content: string) => void;
-  clearMessages: () => void;
+  endSession: () => void;
 }
 
 export const useInterviewStore = create<InterviewState>()((set) => ({
+  sessionId: null,
   isActive: false,
+  currentQuestion: '',
+  questionNumber: 0,
+  totalQuestions: 0,
   persona: 'professional',
-  messages: [],
+  conversation: [],
   
-  setIsActive: (active) => set({ isActive: active }),
   setPersona: (persona) => set({ persona }),
+  startSession: (sessionId, totalQuestions) => set({
+    sessionId,
+    totalQuestions,
+    isActive: true,
+    currentQuestion: '',
+    questionNumber: 0,
+    conversation: [],
+  }),
+  setQuestion: (question, questionNumber) => set({
+    currentQuestion: question,
+    questionNumber,
+  }),
   addMessage: (role, content) =>
     set((state) => ({
-      messages: [...state.messages, { role, content, timestamp: Date.now() }],
+      conversation: [...state.conversation, { role, content, timestamp: Date.now() }],
     })),
-  clearMessages: () => set({ messages: [] }),
+  endSession: () => set({
+    sessionId: null,
+    isActive: false,
+    currentQuestion: '',
+    questionNumber: 0,
+    totalQuestions: 0,
+    conversation: [],
+  }),
 }));

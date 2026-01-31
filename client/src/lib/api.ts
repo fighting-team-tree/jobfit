@@ -176,7 +176,72 @@ export const interviewAPI = {
     const response = await fetch(`${API_BASE_URL}/interview/`);
     return handleResponse(response);
   },
+  /**
+   * Start interview session
+   */
+  async startInterview(
+    profile: object,
+    jdText: string,
+    persona: 'professional' | 'friendly' | 'challenging' = 'professional',
+    maxQuestions: number = 5
+  ): Promise<InterviewSession> {
+    const response = await fetch(`${API_BASE_URL}/interview/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile,
+        jd_text: jdText,
+        persona,
+        max_questions: maxQuestions,
+      }),
+    });
+    return handleResponse<InterviewSession>(response);
+  },
+  /**
+   * Respond to current question
+   */
+  async respond(sessionId: string, answer: string): Promise<InterviewResponse> {
+    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer }),
+    });
+    return handleResponse<InterviewResponse>(response);
+  },
+  /**
+   * Get interview feedback
+   */
+  async getFeedback(sessionId: string): Promise<InterviewFeedback> {
+    const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/feedback`);
+    return handleResponse<InterviewFeedback>(response);
+  },
 };
+
+export interface InterviewSession {
+  session_id: string;
+  question: string;
+  question_number: number;
+  total_questions: number;
+  persona: string;
+}
+
+export interface InterviewResponse {
+  session_id: string;
+  status: 'in_progress' | 'completed';
+  message?: string;
+  question?: string;
+  question_number?: number;
+  total_questions?: number;
+}
+
+export interface InterviewFeedback {
+  session_id: string;
+  total_questions: number;
+  duration_seconds: number;
+  conversation: Array<{ role: string; content: string; timestamp: string }>;
+  feedback_summary: string;
+  scores: Record<string, number>;
+}
 
 // ============ Roadmap Types ============
 
@@ -219,7 +284,7 @@ export const roadmapAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         gap_analysis: gapAnalysis,
-        hours_per_week: hoursPerWeek,
+        available_hours_per_week: hoursPerWeek,
         weeks,
       }),
     });
@@ -229,12 +294,20 @@ export const roadmapAPI = {
   /**
    * Mark a todo as completed
    */
-  async completeTodo(todoId: number): Promise<{ success: boolean }> {
-    const response = await fetch(`${API_BASE_URL}/roadmap/todo/${todoId}/complete`, {
+  async completeTodo(todoId: number): Promise<RoadmapTodoCompleteResponse> {
+    const url = new URL(`${API_BASE_URL}/roadmap/todo/complete`);
+    url.searchParams.set('todo_id', String(todoId));
+    const response = await fetch(url.toString(), {
       method: 'POST',
     });
-    return handleResponse(response);
+    return handleResponse<RoadmapTodoCompleteResponse>(response);
   },
 };
+
+export interface RoadmapTodoCompleteResponse {
+  status: string;
+  message: string;
+  todo_id: number;
+}
 
 export default { analysisAPI, interviewAPI, roadmapAPI };

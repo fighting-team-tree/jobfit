@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic } from 'lucide-react';
-import { analysisAPI, roadmapAPI, type GapAnalysis, type Roadmap } from '../lib/api';
+import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function DashboardPage() {

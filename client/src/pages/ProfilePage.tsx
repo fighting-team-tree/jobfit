@@ -57,10 +57,17 @@ export default function ProfilePage() {
                 setResumeFileResult(result);
             } else if (uploadMode === 'text' && resumeText.trim()) {
                 const result = await analysisAPI.analyzeResume(resumeText);
+                const structuredResult = {
+                    skills: result.skills,
+                    experience: result.experience,
+                    education: result.education,
+                    projects: result.projects,
+                    certifications: result.certifications,
+                };
                 // Convert to file response format for consistency
                 setResumeFileResult({
                     markdown: resumeText,
-                    structured: result as any,
+                    structured: structuredResult,
                     pages: 1,
                     success: true
                 });
