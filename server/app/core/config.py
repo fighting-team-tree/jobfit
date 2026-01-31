@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     NVIDIA_API_KEY: str = os.getenv("NVIDIA_API_KEY", "")
     ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    # Database
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/jobfit")
 
     class Config:
         case_sensitive = True

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
 from app.core.config import settings
+from app.tasks.calendar_watcher import start_background_tasks
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,6 +20,10 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.on_event("startup")
+async def startup_event():
+    await start_background_tasks()
 
 @app.get("/")
 def root():
