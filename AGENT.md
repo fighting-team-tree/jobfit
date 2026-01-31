@@ -28,6 +28,10 @@ AI 코딩 어시스턴트(Gemini, Codex 등)를 위한 프로젝트 컨텍스트
 - **Styling**: Tailwind CSS
 - **State**: Zustand
 
+### DevOps & Tools
+- **Code Review**: CodeRabbit (AI Agent) + Jules
+- **CI/CD**: GitHub Actions (Planned)
+
 ---
 
 ## Operation Manual
