@@ -9,6 +9,7 @@ from typing import Optional, List
 import json
 
 from app.services.nvidia_service import nvidia_service
+from app.services.resume_parser_service import resume_parser_service
 
 router = APIRouter()
 
@@ -42,6 +43,15 @@ class ResumeAnalysisResponse(BaseModel):
     certifications: List[str] = []
     raw_text: Optional[str] = None
     parse_error: bool = False
+
+
+class ResumeFileResponse(BaseModel):
+    """Response for file-based resume parsing."""
+    markdown: str = ""
+    structured: Optional[dict] = None
+    pages: int = 0
+    success: bool = False
+    error: Optional[str] = None
 
 
 class GapAnalysisResponse(BaseModel):
@@ -84,20 +94,24 @@ async def analyze_resume_text(request: ResumeTextRequest):
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-@router.post("/resume/file", response_model=ResumeAnalysisResponse)
-async def analyze_resume_file(file: UploadFile = File(...)):
+@router.post("/resume/file", response_model=ResumeFileResponse)
+async def analyze_resume_file(
+    file: UploadFile = File(...),
+    extract_structured: bool = True
+):
     """
-    Upload and analyze a resume file (PDF or TXT).
+    Upload and analyze a resume file (PDF or image).
     
-    - **file**: Resume file (PDF, TXT supported)
+    - **file**: Resume file (PDF, PNG, JPG supported)
+    - **extract_structured**: Whether to extract structured JSON from markdown
     
-    Returns structured resume data.
+    Returns parsed markdown and optionally structured JSON.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
     # Check file extension
-    allowed_extensions = [".pdf", ".txt", ".md"]
+    allowed_extensions = [".pdf", ".png", ".jpg", ".jpeg"]
     file_ext = "." + file.filename.split(".")[-1].lower()
     
     if file_ext not in allowed_extensions:
@@ -109,19 +123,33 @@ async def analyze_resume_file(file: UploadFile = File(...)):
     try:
         content = await file.read()
         
-        if file_ext == ".pdf":
-            # For PDF, we'd need a PDF parser - for now, return error
-            # In production, use pdfplumber or PyPDF2
-            raise HTTPException(
-                status_code=501, 
-                detail="PDF parsing not yet implemented. Please paste text directly."
-            )
-        else:
-            # Text file
-            resume_text = content.decode("utf-8")
+        # Parse file using VLM
+        parse_result = await resume_parser_service.parse_resume_file(
+            file_bytes=content,
+            file_extension=file_ext,
+            apply_pii_mask=True
+        )
         
-        result = await nvidia_service.parse_resume(resume_text)
-        return ResumeAnalysisResponse(**result)
+        if not parse_result["success"]:
+            raise HTTPException(
+                status_code=500, 
+                detail=parse_result.get("error", "Failed to parse resume")
+            )
+        
+        # Optionally extract structured JSON
+        structured_data = None
+        if extract_structured and parse_result["markdown"]:
+            structured_data = await resume_parser_service.parse_to_structured_json(
+                parse_result["markdown"]
+            )
+        
+        return ResumeFileResponse(
+            markdown=parse_result["markdown"],
+            structured=structured_data,
+            pages=parse_result["pages"],
+            success=True,
+            error=None
+        )
         
     except HTTPException:
         raise
