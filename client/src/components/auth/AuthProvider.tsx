@@ -3,7 +3,7 @@
  *
  * Wraps the app and handles initial auth check.
  */
-import { useEffect, ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useAuthStore } from '../../lib/authStore';
 
 interface AuthProviderProps {
@@ -11,7 +11,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { checkAuth, isLoading } = useAuthStore();
+  const { checkAuth } = useAuthStore();
 
   useEffect(() => {
     // Check auth status on app load

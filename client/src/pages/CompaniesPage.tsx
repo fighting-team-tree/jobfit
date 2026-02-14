@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Building2, ExternalLink, Trash2, Play, CheckCircle, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
+import { useProfileStore } from '../lib/store';
 
 interface Company {
     id: string;
@@ -19,20 +20,16 @@ interface Company {
     error_message?: string;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 export default function CompaniesPage() {
+    const { profile } = useProfileStore();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newCompanyName, setNewCompanyName] = useState('');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-
-    // Load profile from localStorage
-    const getProfile = () => {
-        const stored = localStorage.getItem('jobfit_profile');
-        return stored ? JSON.parse(stored) : null;
-    };
 
     useEffect(() => {
         fetchCompanies();
@@ -203,7 +200,7 @@ export default function CompaniesPage() {
                             {selectedCompany ? (
                                 <CompanyDetail
                                     company={selectedCompany}
-                                    profile={getProfile()}
+                                    profile={profile}
                                     onUpdate={(updated) => {
                                         setCompanies(companies.map(c => c.id === updated.id ? updated : c));
                                         setSelectedCompany(updated);
@@ -273,7 +270,8 @@ function CompanyDetail({
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isScraping, setIsScraping] = useState(false);
 
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    const API_BASE = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
     const updateJD = async () => {
         try {
