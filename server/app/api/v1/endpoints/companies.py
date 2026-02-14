@@ -5,20 +5,19 @@ Manages company tabs with JD input and matching analysis.
 Now with PostgreSQL database support and Replit authentication.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import Optional, List, Literal
-from datetime import datetime
 import uuid
+from datetime import datetime
+from typing import Literal
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
-from app.core.database import get_db
 from app.core.auth import get_optional_user
-from app.models.user import ReplitUser, OptionalUser
+from app.core.database import get_db
 from app.models.db_models import Company as CompanyModel
+from app.models.user import OptionalUser, ReplitUser
 from app.services.user_service import get_or_create_user
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -32,53 +31,59 @@ companies_store: dict = {}
 
 class CompanyCreate(BaseModel):
     """Request to create a new company."""
+
     name: str
-    jd_text: Optional[str] = None
-    jd_url: Optional[str] = None
+    jd_text: str | None = None
+    jd_url: str | None = None
 
 
 class CompanyUpdate(BaseModel):
     """Request to update a company."""
-    name: Optional[str] = None
-    jd_text: Optional[str] = None
-    jd_url: Optional[str] = None
+
+    name: str | None = None
+    jd_text: str | None = None
+    jd_url: str | None = None
 
 
 class MatchResultResponse(BaseModel):
     """Match analysis result."""
+
     match_score: float = 0
-    matching_skills: List[str] = []
-    missing_skills: List[str] = []
-    strengths: List[str] = []
-    recommendations: List[str] = []
-    jd_analysis: Optional[dict] = None
-    score_breakdown: Optional[dict] = None
+    matching_skills: list[str] = []
+    missing_skills: list[str] = []
+    strengths: list[str] = []
+    recommendations: list[str] = []
+    jd_analysis: dict | None = None
+    score_breakdown: dict | None = None
 
 
 class CompanyResponse(BaseModel):
     """Company response model."""
+
     id: str
     name: str
-    jd_text: Optional[str] = None
-    jd_url: Optional[str] = None
+    jd_text: str | None = None
+    jd_url: str | None = None
     status: Literal["pending", "analyzing", "analyzed", "high_match", "error"] = "pending"
-    match_result: Optional[MatchResultResponse] = None
+    match_result: MatchResultResponse | None = None
     created_at: str
-    updated_at: Optional[str] = None
-    error_message: Optional[str] = None
+    updated_at: str | None = None
+    error_message: str | None = None
 
 
 class ProfileForAnalysis(BaseModel):
     """User profile for analysis."""
-    skills: List[str] = []
-    experience: List[dict] = []
-    education: List[dict] = []
-    projects: List[dict] = []
-    certifications: List[str] = []
+
+    skills: list[str] = []
+    experience: list[dict] = []
+    education: list[dict] = []
+    projects: list[dict] = []
+    certifications: list[str] = []
 
 
 class AnalyzeRequest(BaseModel):
     """Request to analyze company match."""
+
     profile: ProfileForAnalysis
 
 
@@ -94,7 +99,9 @@ def company_model_to_response(company: CompanyModel) -> CompanyResponse:
         jd_url=company.jd_url,
         status=company.status or "pending",
         match_result=company.match_result,
-        created_at=company.created_at.isoformat() if company.created_at else datetime.now().isoformat(),
+        created_at=company.created_at.isoformat()
+        if company.created_at
+        else datetime.now().isoformat(),
         updated_at=company.updated_at.isoformat() if company.updated_at else None,
         error_message=company.error_message,
     )
@@ -105,7 +112,7 @@ def company_dict_to_response(company: dict) -> CompanyResponse:
     return CompanyResponse(**company)
 
 
-def use_database(db: Optional[AsyncSession], user: OptionalUser) -> bool:
+def use_database(db: AsyncSession | None, user: OptionalUser) -> bool:
     """Check if we should use database mode."""
     return db is not None and user.is_authenticated
 
@@ -116,8 +123,8 @@ def use_database(db: Optional[AsyncSession], user: OptionalUser) -> bool:
 @router.get("/")
 async def list_companies(
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
-) -> List[CompanyResponse]:
+    db: AsyncSession | None = Depends(get_db),
+) -> list[CompanyResponse]:
     """
     Get all companies for the current user.
 
@@ -142,7 +149,7 @@ async def list_companies(
 async def create_company(
     request: CompanyCreate,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
     """
     Create a new company for job matching.
@@ -194,15 +201,14 @@ async def create_company(
 async def get_company(
     company_id: str,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
     """Get a specific company by ID."""
     # Database mode
     if use_database(db, user):
         result = await db.execute(
             select(CompanyModel).where(
-                CompanyModel.id == company_id,
-                CompanyModel.user_id == user.user_id
+                CompanyModel.id == company_id, CompanyModel.user_id == user.user_id
             )
         )
         company = result.scalar_one_or_none()
@@ -224,7 +230,7 @@ async def update_company(
     company_id: str,
     request: CompanyUpdate,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
     """
     Update a company's details.
@@ -237,8 +243,7 @@ async def update_company(
     if use_database(db, user):
         result = await db.execute(
             select(CompanyModel).where(
-                CompanyModel.id == company_id,
-                CompanyModel.user_id == user.user_id
+                CompanyModel.id == company_id, CompanyModel.user_id == user.user_id
             )
         )
         company = result.scalar_one_or_none()
@@ -284,15 +289,14 @@ async def update_company(
 async def delete_company(
     company_id: str,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """Delete a company."""
     # Database mode
     if use_database(db, user):
         result = await db.execute(
             select(CompanyModel).where(
-                CompanyModel.id == company_id,
-                CompanyModel.user_id == user.user_id
+                CompanyModel.id == company_id, CompanyModel.user_id == user.user_id
             )
         )
         company = result.scalar_one_or_none()
@@ -318,7 +322,7 @@ async def analyze_company_match(
     company_id: str,
     request: AnalyzeRequest,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
     """
     Analyze job match for a company using Claude Agent.
@@ -338,8 +342,7 @@ async def analyze_company_match(
     if use_database(db, user):
         result = await db.execute(
             select(CompanyModel).where(
-                CompanyModel.id == company_id,
-                CompanyModel.user_id == user.user_id
+                CompanyModel.id == company_id, CompanyModel.user_id == user.user_id
             )
         )
         company = result.scalar_one_or_none()
@@ -349,8 +352,7 @@ async def analyze_company_match(
 
         if not company.jd_text:
             raise HTTPException(
-                status_code=400,
-                detail="Job description is required. Please add JD text first."
+                status_code=400, detail="Job description is required. Please add JD text first."
             )
 
         # Update status to analyzing
@@ -365,8 +367,7 @@ async def analyze_company_match(
 
         if not company_dict.get("jd_text"):
             raise HTTPException(
-                status_code=400,
-                detail="Job description is required. Please add JD text first."
+                status_code=400, detail="Job description is required. Please add JD text first."
             )
 
         company_dict["status"] = "analyzing"
@@ -379,10 +380,7 @@ async def analyze_company_match(
         agent = get_job_matching_agent()
         jd_text = company.jd_text if company else company_dict["jd_text"]
 
-        result = await agent.analyze(
-            profile=request.profile.model_dump(),
-            jd_text=jd_text
-        )
+        result = await agent.analyze(profile=request.profile.model_dump(), jd_text=jd_text)
 
         match_result = {
             "match_score": result.match_score,
@@ -420,7 +418,7 @@ async def analyze_company_match(
         else:
             company_dict["status"] = "error"
             company_dict["error_message"] = error_msg
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg) from e
 
     except Exception as e:
         error_msg = f"Analysis failed: {str(e)}"
@@ -431,14 +429,14 @@ async def analyze_company_match(
         else:
             company_dict["status"] = "error"
             company_dict["error_message"] = error_msg
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg) from e
 
 
 @router.post("/{company_id}/scrape-jd")
 async def scrape_company_jd(
     company_id: str,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
     """
     Scrape job description from the company's JD URL.
@@ -452,8 +450,7 @@ async def scrape_company_jd(
     if use_database(db, user):
         result = await db.execute(
             select(CompanyModel).where(
-                CompanyModel.id == company_id,
-                CompanyModel.user_id == user.user_id
+                CompanyModel.id == company_id, CompanyModel.user_id == user.user_id
             )
         )
         company = result.scalar_one_or_none()
@@ -463,8 +460,7 @@ async def scrape_company_jd(
 
         if not company.jd_url:
             raise HTTPException(
-                status_code=400,
-                detail="JD URL is required. Please add the job posting URL first."
+                status_code=400, detail="JD URL is required. Please add the job posting URL first."
             )
 
         jd_url = company.jd_url
@@ -476,8 +472,7 @@ async def scrape_company_jd(
 
         if not company_dict.get("jd_url"):
             raise HTTPException(
-                status_code=400,
-                detail="JD URL is required. Please add the job posting URL first."
+                status_code=400, detail="JD URL is required. Please add the job posting URL first."
             )
 
         jd_url = company_dict["jd_url"]
@@ -502,12 +497,9 @@ async def scrape_company_jd(
                 company_dict["updated_at"] = datetime.now().isoformat()
                 return company_dict_to_response(company_dict)
         else:
-            raise HTTPException(
-                status_code=500,
-                detail=result.get("error", "Failed to scrape JD")
-            )
+            raise HTTPException(status_code=500, detail=result.get("error", "Failed to scrape JD"))
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}") from e

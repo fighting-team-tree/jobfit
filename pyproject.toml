@@ -38,3 +38,51 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["server/app"]
+
+[dependency-groups]
+dev = [{include-group = "lint"}, {include-group = "test"}]
+lint = [
+    "ruff>=0.15.1",
+]
+test = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+]
+
+# --- Tool Configuration ---
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "S",    # flake8-bandit (security)
+    "ASYNC",# flake8-async
+]
+ignore = [
+    "E501",  # 줄 길이 — ruff format이 코드는 처리, 프롬프트 문자열은 예외
+    "S101",  # assert 사용 허용 (테스트)
+    "S104",  # 0.0.0.0 바인딩 허용 (Replit 배포 필수)
+    "B008",  # Depends() in default args (FastAPI 표준 패턴)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S106", "ASYNC230"]
+"server/app/services/github_service.py" = ["S110", "S112"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--cov=server/app",
+    "--cov-report=term-missing",
+    "--strict-markers",
+]

@@ -5,16 +5,15 @@ Handles real-time mock interview via WebSocket with ElevenLabs TTS.
 """
 
 import asyncio
-import json
 import base64
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+import json
 from datetime import datetime
 
-from app.services.nvidia_service import nvidia_service
-from app.services.elevenlabs_service import elevenlabs_service
 from app.core.config import settings
+from app.services.elevenlabs_service import elevenlabs_service
+from app.services.nvidia_service import nvidia_service
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -29,11 +28,11 @@ class InterviewSession(BaseModel):
     profile: dict
     jd_text: str
     persona: str = "professional"  # professional, friendly, challenging
-    conversation_history: List[dict] = []
+    conversation_history: list[dict] = []
     question_count: int = 0
     max_questions: int = 5
-    started_at: Optional[str] = None
-    ended_at: Optional[str] = None
+    started_at: str | None = None
+    ended_at: str | None = None
 
 
 class StartInterviewRequest(BaseModel):
@@ -51,7 +50,7 @@ class InterviewFeedbackResponse(BaseModel):
     session_id: str
     total_questions: int
     duration_seconds: int
-    conversation: List[dict]
+    conversation: list[dict]
     feedback_summary: str
     scores: dict
 
@@ -127,16 +126,14 @@ async def start_interview(request: StartInterviewRequest):
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start interview: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to start interview: {str(e)}") from e
 
 
 @router.post("/{session_id}/respond")
 async def respond_to_question(
     session_id: str,
-    request: Optional[InterviewAnswerRequest] = None,
-    answer: Optional[str] = None,
+    request: InterviewAnswerRequest | None = None,
+    answer: str | None = None,
 ):
     """
     Submit an answer and get the next question.
@@ -199,9 +196,7 @@ async def respond_to_question(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to generate question: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to generate question: {str(e)}") from e
 
 
 @router.get("/{session_id}/feedback", response_model=InterviewFeedbackResponse)
@@ -279,7 +274,7 @@ async def test_tts_endpoint(text: str = "마이크 테스트 하나 둘 셋"):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}") from e
 
 
 # ============ Agent Auth Endpoint ============
@@ -301,9 +296,7 @@ async def get_agent_auth():
         signed_url = await elevenlabs_service.get_signed_url(agent_id)
         return {"signed_url": signed_url, "agent_id": agent_id}
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to sign URL: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to sign URL: {str(e)}") from e
 
 
 # ============ WebSocket Endpoint (Full-Duplex) ============
@@ -339,9 +332,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
         nonlocal is_ai_speaking
         if is_ai_speaking:
             interrupt_event.set()
-            await websocket.send_json(
-                {"type": "interrupted", "content": "Listening..."}
-            )
+            await websocket.send_json({"type": "interrupted", "content": "Listening..."})
             is_ai_speaking = False
 
     async def on_transcript(text: str, is_final: bool):

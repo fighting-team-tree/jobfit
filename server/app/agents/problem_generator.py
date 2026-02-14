@@ -6,66 +6,67 @@ Uses Qwen2.5-Coder-32B-Instruct model optimized for code generation.
 """
 
 import json
-import httpx
-from typing import List, Optional, Literal
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
+import httpx
 from app.core.config import settings
 
 
 @dataclass
 class GeneratedProblem:
     """A generated practice problem."""
+
     id: str
     title: str
     description: str
     difficulty: Literal["easy", "medium", "hard"]
     problem_type: Literal["coding", "quiz", "practical"]
     skill: str
-    language: Optional[str] = None
-    starter_code: Optional[str] = None
-    hints: List[str] = field(default_factory=list)
-    test_cases: List[dict] = field(default_factory=list)
-    solution: Optional[str] = None
-    explanation: Optional[str] = None
+    language: str | None = None
+    starter_code: str | None = None
+    hints: list[str] = field(default_factory=list)
+    test_cases: list[dict] = field(default_factory=list)
+    solution: str | None = None
+    explanation: str | None = None
 
 
 class ProblemGenerator:
     """
     Generates practice problems for skill development using NVIDIA NIM API.
-    
+
     Uses Qwen2.5-Coder-32B-Instruct for reliable code problem generation.
-    
+
     Supports:
     - Coding challenges with test cases
     - Multiple choice quizzes
     - Practical exercises
     """
-    
+
     BASE_URL = "https://integrate.api.nvidia.com/v1"
     # General-purpose model, proven to work in this project
     MODEL = "meta/llama-3.1-70b-instruct"
-    
+
     def __init__(self):
         """Initialize with NVIDIA API key."""
         if not settings.NVIDIA_API_KEY:
             raise ValueError("NVIDIA_API_KEY is required")
-        
+
         self.api_key = settings.NVIDIA_API_KEY
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-    
+
     async def generate_problems(
         self,
         skill: str,
         difficulty: Literal["easy", "medium", "hard"] = "medium",
         problem_type: Literal["coding", "quiz", "practical"] = "coding",
         language: str = "python",
-        count: int = 1
-    ) -> List[GeneratedProblem]:
+        count: int = 1,
+    ) -> list[GeneratedProblem]:
         """
         Generate practice problems for a specific skill.
 
@@ -103,9 +104,9 @@ class ProblemGenerator:
                 "- 단계별 요구사항\n"
                 "- 예상 결과물\n"
                 "- 평가 기준"
-            )
+            ),
         }
-        
+
         # practical 타입 (프롬프트 작성)과 coding 타입에 따라 다른 JSON 형식 사용
         if problem_type == "practical":
             json_format = (
@@ -121,14 +122,14 @@ class ProblemGenerator:
                 '        "hints": ["프롬프트 작성 힌트1", "힌트2", "힌트3"],\n'
                 '        "test_cases": [\n'
                 '            {"input": "이 프롬프트로 해결해야 할 문제", "expected_output": "기대하는 AI 응답 형태", "explanation": "평가 기준 (한국어)"}\n'
-                '        ],\n'
+                "        ],\n"
                 '        "solution": "모범 프롬프트 예시 (Python 코드가 아님! 실제 프롬프트 텍스트를 작성)",\n'
                 '        "explanation": "이 프롬프트가 효과적인 이유에 대한 상세한 설명 (한국어)"\n'
                 "    }\n"
                 "]\n\n"
                 "⚠️ 필수 요구사항:\n"
                 '1. "solution" 필드에는 Python 코드가 아닌 **완성된 모범 프롬프트 텍스트**를 작성하세요\n'
-                '2. 프롬프트는 Chain-of-Thought, Few-shot 등 해당 기법을 올바르게 적용해야 합니다\n'
+                "2. 프롬프트는 Chain-of-Thought, Few-shot 등 해당 기법을 올바르게 적용해야 합니다\n"
                 '3. "explanation"에는 왜 이 프롬프트가 효과적인지 설명하세요\n'
                 "4. JSON 배열만 반환해주세요"
             )
@@ -146,7 +147,7 @@ class ProblemGenerator:
                 '        "hints": ["힌트1", "힌트2", "힌트3"],\n'
                 '        "test_cases": [\n'
                 '            {"input": "입력 예제", "expected_output": "예상 결과", "explanation": "설명 (한국어)"}\n'
-                '        ],\n'
+                "        ],\n"
                 '        "solution": "완전히 작동하는 Python 정답 코드",\n'
                 '        "explanation": "알고리즘과 풀이 방법에 대한 상세한 설명 (한국어)"\n'
                 "    }\n"
@@ -154,7 +155,7 @@ class ProblemGenerator:
                 "필수 요구사항:\n"
                 '1. "solution" 필드에는 완전히 작동하는 Python 코드가 포함되어야 합니다\n'
                 '2. "explanation" 필드에는 알고리즘에 대한 상세한 한국어 설명이 포함되어야 합니다\n'
-                '3. title, description, hints, test_cases의 설명은 모두 한국어로 작성해주세요\n'
+                "3. title, description, hints, test_cases의 설명은 모두 한국어로 작성해주세요\n"
                 "4. JSON 배열만 반환해주세요"
             )
 
@@ -167,7 +168,7 @@ class ProblemGenerator:
 
         max_retries = 2
         last_error = None
-        
+
         for attempt in range(max_retries):
             try:
                 async with httpx.AsyncClient(timeout=120.0) as client:
@@ -178,37 +179,37 @@ class ProblemGenerator:
                             "model": self.MODEL,
                             "messages": [
                                 {
-                                    "role": "system", 
-                                    "content": "You are an expert coding problem generator. You MUST always include a complete working 'solution' field with actual runnable code and an 'explanation' field in your response. Output valid JSON only."
+                                    "role": "system",
+                                    "content": "You are an expert coding problem generator. You MUST always include a complete working 'solution' field with actual runnable code and an 'explanation' field in your response. Output valid JSON only.",
                                 },
-                                {"role": "user", "content": prompt}
+                                {"role": "user", "content": prompt},
                             ],
                             "temperature": 0.3,
-                            "max_tokens": 6000
-                        }
+                            "max_tokens": 6000,
+                        },
                     )
                     response.raise_for_status()
                     result = response.json()
-                
+
                 content = result["choices"][0]["message"]["content"].strip()
-                
+
                 # Extract JSON from markdown code block if present
                 content = self._extract_json(content)
-                
+
                 # Try to fix incomplete JSON
                 content = self._fix_incomplete_json(content)
-                
+
                 problems_data = json.loads(content)
-                
+
                 # Ensure it's a list
                 if isinstance(problems_data, dict):
                     problems_data = [problems_data]
-                
+
                 problems = []
                 for i, p_data in enumerate(problems_data):
                     problem = GeneratedProblem(
                         id=f"gen_{skill[:10]}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}",
-                        title=p_data.get("title", f"{skill} Problem {i+1}"),
+                        title=p_data.get("title", f"{skill} Problem {i + 1}"),
                         description=p_data.get("description", ""),
                         difficulty=p_data.get("difficulty", difficulty),
                         problem_type=p_data.get("problem_type", problem_type),
@@ -218,75 +219,81 @@ class ProblemGenerator:
                         hints=p_data.get("hints", []),
                         test_cases=p_data.get("test_cases", []),
                         solution=p_data.get("solution"),
-                        explanation=p_data.get("explanation")
+                        explanation=p_data.get("explanation"),
                     )
-                    
+
                     # If solution is missing, generate it separately
                     if not problem.solution:
                         solution_data = await self._generate_solution(problem)
                         problem.solution = solution_data.get("solution")
-                        problem.explanation = solution_data.get("explanation") or problem.explanation
-                    
+                        problem.explanation = (
+                            solution_data.get("explanation") or problem.explanation
+                        )
+
                     problems.append(problem)
-                
+
                 return problems
-                
+
             except json.JSONDecodeError as e:
                 last_error = e
                 if attempt < max_retries - 1:
                     continue  # Retry
-                raise ValueError(f"Problem generation failed: JSON parsing error after {max_retries} attempts")
+                raise ValueError(
+                    f"Problem generation failed: JSON parsing error after {max_retries} attempts"
+                ) from e
             except httpx.HTTPStatusError as e:
-                raise ValueError(f"Problem generation failed: API error {e.response.status_code}")
+                raise ValueError(
+                    f"Problem generation failed: API error {e.response.status_code}"
+                ) from e
             except Exception as e:
-                raise ValueError(f"Problem generation failed: {str(e)}")
-        
+                raise ValueError(f"Problem generation failed: {str(e)}") from e
+
         raise ValueError(f"Problem generation failed: {str(last_error)}")
-    
+
     def _extract_json(self, content: str) -> str:
         """Extract JSON from markdown code blocks or raw text."""
         content = content.strip()
-        
+
         # Try to extract from ```json ... ``` block
         if "```json" in content:
             parts = content.split("```json")
             if len(parts) >= 2:
                 json_part = parts[1].split("```")[0]
                 return json_part.strip()
-        
+
         # Try to extract from ``` ... ``` block
         if "```" in content:
             parts = content.split("```")
             if len(parts) >= 2:
                 return parts[1].strip()
-        
+
         return content
-    
+
     def _fix_incomplete_json(self, content: str) -> str:
         """Try to fix incomplete JSON responses from LLM."""
         content = content.strip()
-        
+
         # If it doesn't start with [, try to find the array
         if not content.startswith("["):
             start_idx = content.find("[")
             if start_idx != -1:
                 content = content[start_idx:]
-        
+
         # Count brackets to check if JSON is complete
         open_brackets = content.count("[") - content.count("]")
         open_braces = content.count("{") - content.count("}")
-        
+
         # If brackets are balanced, return as is
         if open_brackets == 0 and open_braces == 0:
             return content
-        
+
         # Try to close incomplete JSON
         if open_braces > 0 or open_brackets > 0:
             # Find the last complete object
             last_complete = content.rfind("}")
             if last_complete != -1:
                 # Check if we can close the array here
-                test_content = content[:last_complete + 1]
+                test_content = content[: last_complete + 1]
                 # Count brackets in truncated content
                 remaining_brackets = test_content.count("[") - test_content.count("]")
                 test_content += "]" * remaining_brackets
@@ -295,55 +302,103 @@ class ProblemGenerator:
                     return test_content
                 except json.JSONDecodeError:
                     pass
-        
+
         # Add missing closing brackets/braces
         content += "}" * open_braces
         content += "]" * open_brackets
-        
+
         return content
-    
+
     def _classify_skill(self, skill: str) -> str:
         """스킬을 카테고리로 분류합니다."""
         skill_lower = skill.lower()
 
         # AI/LLM 관련 스킬
         ai_keywords = [
-            "chain", "thought", "cot", "prompt", "llm", "gpt", "langchain",
-            "rag", "retrieval", "embedding", "fine-tuning", "fine tuning",
-            "transformer", "attention", "bert", "agent", "langgraph"
+            "chain",
+            "thought",
+            "cot",
+            "prompt",
+            "llm",
+            "gpt",
+            "langchain",
+            "rag",
+            "retrieval",
+            "embedding",
+            "fine-tuning",
+            "fine tuning",
+            "transformer",
+            "attention",
+            "bert",
+            "agent",
+            "langgraph",
         ]
         if any(kw in skill_lower for kw in ai_keywords):
             return "ai_ml"
 
         # 시스템 디자인 관련 스킬
         system_keywords = [
-            "system design", "architecture", "microservice", "distributed",
-            "scalability", "load balancing", "caching", "database design",
-            "api design", "rest", "graphql", "event-driven"
+            "system design",
+            "architecture",
+            "microservice",
+            "distributed",
+            "scalability",
+            "load balancing",
+            "caching",
+            "database design",
+            "api design",
+            "rest",
+            "graphql",
+            "event-driven",
         ]
         if any(kw in skill_lower for kw in system_keywords):
             return "system_design"
 
         # DevOps/인프라 관련 스킬
         devops_keywords = [
-            "docker", "kubernetes", "k8s", "ci/cd", "jenkins", "terraform",
-            "aws", "gcp", "azure", "cloud", "devops", "infrastructure"
+            "docker",
+            "kubernetes",
+            "k8s",
+            "ci/cd",
+            "jenkins",
+            "terraform",
+            "aws",
+            "gcp",
+            "azure",
+            "cloud",
+            "devops",
+            "infrastructure",
         ]
         if any(kw in skill_lower for kw in devops_keywords):
             return "devops"
 
         # 데이터/분석 관련 스킬
         data_keywords = [
-            "pandas", "numpy", "data analysis", "visualization", "sql",
-            "etl", "data pipeline", "spark", "hadoop", "analytics"
+            "pandas",
+            "numpy",
+            "data analysis",
+            "visualization",
+            "sql",
+            "etl",
+            "data pipeline",
+            "spark",
+            "hadoop",
+            "analytics",
         ]
         if any(kw in skill_lower for kw in data_keywords):
             return "data"
 
         # 테스팅 관련 스킬
         test_keywords = [
-            "test", "tdd", "bdd", "unit test", "integration", "e2e",
-            "pytest", "jest", "testing"
+            "test",
+            "tdd",
+            "bdd",
+            "unit test",
+            "integration",
+            "e2e",
+            "pytest",
+            "jest",
+            "testing",
         ]
         if any(kw in skill_lower for kw in test_keywords):
             return "testing"
@@ -433,7 +488,7 @@ class ProblemGenerator:
                 "- 스타터 코드 템플릿\n"
                 "- 완전히 작동하는 정답 코드\n"
                 "- 시간/공간 복잡도 분석"
-            )
+            ),
         }
 
         return instructions.get(category, instructions["coding"])
@@ -467,33 +522,32 @@ class ProblemGenerator:
                     json={
                         "model": self.MODEL,
                         "messages": [
-                            {"role": "system", "content": "당신은 코딩 전문가입니다. 완전히 작동하는 솔루션을 제공하세요. JSON만 출력하세요."},
-                            {"role": "user", "content": prompt}
+                            {
+                                "role": "system",
+                                "content": "당신은 코딩 전문가입니다. 완전히 작동하는 솔루션을 제공하세요. JSON만 출력하세요.",
+                            },
+                            {"role": "user", "content": prompt},
                         ],
                         "temperature": 0.2,
-                        "max_tokens": 2000
-                    }
+                        "max_tokens": 2000,
+                    },
                 )
                 response.raise_for_status()
                 result = response.json()
-            
+
             content = result["choices"][0]["message"]["content"].strip()
             content = self._extract_json(content)
-            
+
             return json.loads(content)
-            
+
         except Exception as e:
             return {
                 "solution": f"# 해답 생성 실패: {str(e)}",
-                "explanation": "해답을 자동으로 생성할 수 없습니다."
+                "explanation": "해답을 자동으로 생성할 수 없습니다.",
             }
-    
-    async def evaluate_solution(
-        self,
-        problem: GeneratedProblem,
-        user_solution: str
-    ) -> dict:
-        '''
+
+    async def evaluate_solution(self, problem: GeneratedProblem, user_solution: str) -> dict:
+        """
         Evaluate a user's solution to a problem.
 
         Args:
@@ -502,7 +556,7 @@ class ProblemGenerator:
 
         Returns:
             Evaluation result with feedback
-        '''
+        """
         prompt = (
             "다음 문제에 대한 사용자의 풀이를 평가해주세요:\n\n"
             "## 문제 정보\n"
@@ -541,12 +595,15 @@ class ProblemGenerator:
                     json={
                         "model": self.MODEL,
                         "messages": [
-                            {"role": "system", "content": "당신은 코드 평가 전문가입니다. 사용자의 풀이를 정확하게 평가하고 건설적인 피드백을 한국어로 제공합니다. JSON만 출력하세요."},
-                            {"role": "user", "content": prompt}
+                            {
+                                "role": "system",
+                                "content": "당신은 코드 평가 전문가입니다. 사용자의 풀이를 정확하게 평가하고 건설적인 피드백을 한국어로 제공합니다. JSON만 출력하세요.",
+                            },
+                            {"role": "user", "content": prompt},
                         ],
                         "temperature": 0.1,
-                        "max_tokens": 2000
-                    }
+                        "max_tokens": 2000,
+                    },
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -561,12 +618,12 @@ class ProblemGenerator:
                 "passed": False,
                 "score": 0,
                 "feedback": f"평가 실패: {str(e)}",
-                "details": ["다시 시도해주세요"]
+                "details": ["다시 시도해주세요"],
             }
 
 
 # Singleton instance
-problem_generator: Optional[ProblemGenerator] = None
+problem_generator: ProblemGenerator | None = None
 
 
 def get_problem_generator() -> ProblemGenerator:

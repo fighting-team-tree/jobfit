@@ -9,46 +9,45 @@ LangGraph-based agent with 4-node pipeline:
 """
 
 import json
-from typing import TypedDict, List, Optional
 from dataclasses import dataclass
+from typing import TypedDict
 
-from langgraph.graph import StateGraph, START, END
 from anthropic import Anthropic
-
 from app.core.config import settings
 from app.services.skill_matcher_service import skill_matcher_service
-
+from langgraph.graph import END, START, StateGraph
 
 # ============ State Definition ============
 
 
 class UnifiedMatchState(TypedDict):
     """State for the unified matching graph."""
+
     # Inputs
     profile: dict
     jd_text: str
 
     # Intermediate - JD Analysis
-    jd_analysis: Optional[dict]
-    required_skills: Optional[List[str]]
-    preferred_skills: Optional[List[str]]
+    jd_analysis: dict | None
+    required_skills: list[str] | None
+    preferred_skills: list[str] | None
 
     # Intermediate - Profile Skills
-    profile_skills: Optional[List[str]]
+    profile_skills: list[str] | None
 
     # Intermediate - Matching Results
-    matched_required: Optional[List[str]]
-    matched_preferred: Optional[List[str]]
-    missing_required: Optional[List[str]]
-    missing_preferred: Optional[List[str]]
+    matched_required: list[str] | None
+    matched_preferred: list[str] | None
+    missing_required: list[str] | None
+    missing_preferred: list[str] | None
 
     # Final Output
-    match_score: Optional[float]
-    feedback: Optional[str]
-    recommendations: Optional[List[str]]
-    strengths: Optional[List[str]]
-    score_breakdown: Optional[dict]
-    error: Optional[str]
+    match_score: float | None
+    feedback: str | None
+    recommendations: list[str] | None
+    strengths: list[str] | None
+    score_breakdown: dict | None
+    error: str | None
 
 
 # ============ Result Data Class ============
@@ -57,18 +56,19 @@ class UnifiedMatchState(TypedDict):
 @dataclass
 class UnifiedMatchResult:
     """Final result of unified matching analysis."""
+
     match_score: float
-    matching_skills: List[str]
-    missing_skills: List[str]
-    matching_required: List[str]
-    missing_required: List[str]
-    matching_preferred: List[str]
-    missing_preferred: List[str]
-    strengths: List[str]
-    recommendations: List[str]
+    matching_skills: list[str]
+    missing_skills: list[str]
+    matching_required: list[str]
+    missing_required: list[str]
+    matching_preferred: list[str]
+    missing_preferred: list[str]
+    strengths: list[str]
+    recommendations: list[str]
     feedback: str
     jd_analysis: dict
-    profile_skills: List[str]
+    profile_skills: list[str]
     score_breakdown: dict
 
 
@@ -153,8 +153,10 @@ class UnifiedMatchingAgent:
 
         return UnifiedMatchResult(
             match_score=final_state.get("match_score", 0),
-            matching_skills=final_state.get("matched_required", []) + final_state.get("matched_preferred", []),
-            missing_skills=final_state.get("missing_required", []) + final_state.get("missing_preferred", []),
+            matching_skills=final_state.get("matched_required", [])
+            + final_state.get("matched_preferred", []),
+            missing_skills=final_state.get("missing_required", [])
+            + final_state.get("missing_preferred", []),
             matching_required=final_state.get("matched_required", []),
             missing_required=final_state.get("missing_required", []),
             matching_preferred=final_state.get("matched_preferred", []),
@@ -202,7 +204,7 @@ Return ONLY the JSON, no other text."""
                 model=self.model,
                 max_tokens=2000,
                 temperature=0,  # Deterministic
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.content[0].text.strip()
@@ -251,21 +253,76 @@ Return ONLY the JSON, no other text."""
 
         return {"profile_skills": list(skills)}
 
-    def _extract_tech_keywords(self, text: str) -> List[str]:
+    def _extract_tech_keywords(self, text: str) -> list[str]:
         """Extract technology keywords from text."""
         tech_keywords = [
-            "python", "javascript", "typescript", "react", "vue", "angular",
-            "node.js", "nodejs", "express", "fastapi", "django", "flask",
-            "java", "spring", "kotlin", "swift", "go", "golang", "rust",
-            "c++", "c#", ".net", "ruby", "rails", "php", "laravel",
-            "sql", "mysql", "postgresql", "mongodb", "redis", "elasticsearch",
-            "docker", "kubernetes", "aws", "gcp", "azure", "terraform",
-            "git", "github", "gitlab", "ci/cd", "jenkins", "linux",
-            "machine learning", "deep learning", "tensorflow", "pytorch",
-            "rest", "graphql", "grpc", "microservices", "api",
-            "html", "css", "sass", "tailwind", "bootstrap",
-            "langchain", "langgraph", "llm", "openai", "anthropic",
-            "agile", "scrum", "jira", "figma"
+            "python",
+            "javascript",
+            "typescript",
+            "react",
+            "vue",
+            "angular",
+            "node.js",
+            "nodejs",
+            "express",
+            "fastapi",
+            "django",
+            "flask",
+            "java",
+            "spring",
+            "kotlin",
+            "swift",
+            "go",
+            "golang",
+            "rust",
+            "c++",
+            "c#",
+            ".net",
+            "ruby",
+            "rails",
+            "php",
+            "laravel",
+            "sql",
+            "mysql",
+            "postgresql",
+            "mongodb",
+            "redis",
+            "elasticsearch",
+            "docker",
+            "kubernetes",
+            "aws",
+            "gcp",
+            "azure",
+            "terraform",
+            "git",
+            "github",
+            "gitlab",
+            "ci/cd",
+            "jenkins",
+            "linux",
+            "machine learning",
+            "deep learning",
+            "tensorflow",
+            "pytorch",
+            "rest",
+            "graphql",
+            "grpc",
+            "microservices",
+            "api",
+            "html",
+            "css",
+            "sass",
+            "tailwind",
+            "bootstrap",
+            "langchain",
+            "langgraph",
+            "llm",
+            "openai",
+            "anthropic",
+            "agile",
+            "scrum",
+            "jira",
+            "figma",
         ]
 
         text_lower = text.lower()
@@ -293,7 +350,7 @@ Return ONLY the JSON, no other text."""
             match_result = await skill_matcher_service.match_skills(
                 profile_skills=profile_skills,
                 required_skills=required_skills,
-                preferred_skills=preferred_skills
+                preferred_skills=preferred_skills,
             )
 
             return {
@@ -312,15 +369,12 @@ Return ONLY the JSON, no other text."""
                 },
             }
 
-        except Exception as e:
+        except Exception:
             # Fallback to simple string matching
             return self._fallback_match(profile_skills, required_skills, preferred_skills)
 
     def _fallback_match(
-        self,
-        profile_skills: List[str],
-        required_skills: List[str],
-        preferred_skills: List[str]
+        self, profile_skills: list[str], required_skills: list[str], preferred_skills: list[str]
     ) -> dict:
         """Fallback matching using simple string comparison."""
         profile_lower = [s.lower() for s in profile_skills]
@@ -364,7 +418,7 @@ Return ONLY the JSON, no other text."""
         """
         Node 4: Generate personalized feedback and recommendations.
         """
-        profile = state["profile"]
+        _ = state["profile"]
         jd_analysis = state.get("jd_analysis", {})
         matched_required = state.get("matched_required", [])
         matched_preferred = state.get("matched_preferred", [])
@@ -379,12 +433,12 @@ Return ONLY the JSON, no other text."""
 
 Match Score: {match_score}%
 
-Profile Skills: {state.get('profile_skills', [])}
+Profile Skills: {state.get("profile_skills", [])}
 
 JD Analysis:
-- Position: {jd_analysis.get('title', 'Unknown')}
-- Required Skills: {jd_analysis.get('required_skills', [])}
-- Preferred Skills: {jd_analysis.get('preferred_skills', [])}
+- Position: {jd_analysis.get("title", "Unknown")}
+- Required Skills: {jd_analysis.get("required_skills", [])}
+- Preferred Skills: {jd_analysis.get("preferred_skills", [])}
 
 Matching Results:
 - Matched Required: {matched_required}
@@ -411,7 +465,7 @@ Return ONLY the JSON."""
                 model=self.model,
                 max_tokens=1000,
                 temperature=0.3,  # Slight creativity for personalization
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             content = response.content[0].text.strip()
@@ -431,7 +485,9 @@ Return ONLY the JSON."""
         except Exception:
             # Fallback
             strengths = [f"Strong in {s}" for s in matched_required[:3]] if matched_required else []
-            recommendations = [f"Learn {s}" for s in missing_required[:3]] if missing_required else []
+            recommendations = (
+                [f"Learn {s}" for s in missing_required[:3]] if missing_required else []
+            )
 
             return {
                 "feedback": f"Your profile matches {match_score}% of the requirements.",
@@ -441,7 +497,7 @@ Return ONLY the JSON."""
 
 
 # Singleton instance
-unified_matching_agent: Optional[UnifiedMatchingAgent] = None
+unified_matching_agent: UnifiedMatchingAgent | None = None
 
 
 def get_unified_matching_agent() -> UnifiedMatchingAgent:

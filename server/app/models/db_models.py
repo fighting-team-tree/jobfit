@@ -5,12 +5,11 @@ ORM models for Replit PostgreSQL.
 """
 
 import uuid
-from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Integer
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 
 def generate_uuid() -> str:
@@ -20,6 +19,7 @@ def generate_uuid() -> str:
 
 class User(Base):
     """User model - stores Replit user info."""
+
     __tablename__ = "users"
 
     id = Column(String, primary_key=True)  # Replit user_id
@@ -30,12 +30,17 @@ class User(Base):
     # Relationships
     companies = relationship("Company", back_populates="user", cascade="all, delete-orphan")
     roadmaps = relationship("Roadmap", back_populates="user", cascade="all, delete-orphan")
-    interview_sessions = relationship("InterviewSession", back_populates="user", cascade="all, delete-orphan")
-    user_profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    interview_sessions = relationship(
+        "InterviewSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    user_profile = relationship(
+        "UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class Company(Base):
     """Company model - stores job matching targets."""
+
     __tablename__ = "companies"
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -55,6 +60,7 @@ class Company(Base):
 
 class Roadmap(Base):
     """Roadmap model - stores learning roadmaps."""
+
     __tablename__ = "roadmaps"
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -73,6 +79,7 @@ class Roadmap(Base):
 
 class InterviewSession(Base):
     """Interview session model - stores mock interview sessions."""
+
     __tablename__ = "interview_sessions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -92,16 +99,17 @@ class InterviewSession(Base):
 
 class UserProfile(Base):
     """User profile model - stores user's resume and analysis data."""
+
     __tablename__ = "user_profiles"
 
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id"), unique=True, nullable=False)
-    profile_data = Column(JSON, nullable=True)        # ProfileStructured
+    profile_data = Column(JSON, nullable=True)  # ProfileStructured
     resume_file_result = Column(JSON, nullable=True)  # ResumeFileResponse
-    github_analysis = Column(JSON, nullable=True)     # GitHubAnalysisResponse
-    gap_analysis = Column(JSON, nullable=True)        # GapAnalysis
-    jd_text = Column(Text, nullable=True)             # 채용공고 텍스트
-    github_url = Column(String, nullable=True)        # GitHub URL
+    github_analysis = Column(JSON, nullable=True)  # GitHubAnalysisResponse
+    gap_analysis = Column(JSON, nullable=True)  # GapAnalysis
+    jd_text = Column(Text, nullable=True)  # 채용공고 텍스트
+    github_url = Column(String, nullable=True)  # GitHub URL
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 

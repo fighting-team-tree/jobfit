@@ -1,13 +1,13 @@
-import os
-from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from pathlib import Path
+
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.init_db import init_db
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Frontend 빌드 경로
 FRONTEND_BUILD_DIR = Path(__file__).parent.parent / "client" / "dist"
@@ -68,6 +68,7 @@ if FRONTEND_BUILD_DIR.exists():
         # 그 외는 index.html 반환 (SPA 라우팅)
         return FileResponse(FRONTEND_BUILD_DIR / "index.html")
 else:
+
     @app.get("/")
     def root():
         return {"message": "Welcome to JobFit API", "docs": "/docs"}

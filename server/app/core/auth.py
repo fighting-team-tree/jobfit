@@ -4,8 +4,8 @@ Replit Auth Dependencies
 Extracts user information from Replit Auth headers.
 """
 
-from fastapi import Request, HTTPException, status
-from app.models.user import ReplitUser, OptionalUser
+from app.models.user import OptionalUser, ReplitUser
+from fastapi import HTTPException, Request, status
 
 
 async def get_current_user(request: Request) -> ReplitUser:

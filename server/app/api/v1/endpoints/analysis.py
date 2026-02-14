@@ -4,14 +4,13 @@ Analysis API Endpoints
 Handles resume parsing, GitHub analysis, and gap analysis.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Literal
-import json
+from typing import Literal
 
+from app.services.jd_scraper_service import jd_scraper_service
 from app.services.nvidia_service import nvidia_service
 from app.services.resume_parser_service import resume_parser_service
-from app.services.jd_scraper_service import jd_scraper_service
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -46,54 +45,54 @@ class JDScrapedResponse(BaseModel):
     title: str = ""
     raw_text: str = ""
     success: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     method: str = "httpx"
 
 
 class ProfileContact(BaseModel):
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    github: Optional[str] = None
-    blog: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    github: str | None = None
+    blog: str | None = None
 
 
 class ProfileExperience(BaseModel):
     company: str
-    role: Optional[str] = None
-    duration: Optional[str] = None
-    description: Optional[str] = None
+    role: str | None = None
+    duration: str | None = None
+    description: str | None = None
 
 
 class ProfileEducation(BaseModel):
     school: str
-    degree: Optional[str] = None
-    major: Optional[str] = None
-    year: Optional[str] = None
-    gpa: Optional[str] = None
+    degree: str | None = None
+    major: str | None = None
+    year: str | None = None
+    gpa: str | None = None
 
 
 class ProfileProject(BaseModel):
     name: str
-    description: Optional[str] = None
-    tech_stack: Optional[List[str]] = None
-    role: Optional[str] = None
+    description: str | None = None
+    tech_stack: list[str] | None = None
+    role: str | None = None
 
 
 class ProfileStructured(BaseModel):
-    name: Optional[str] = None
-    contact: Optional[ProfileContact] = None
-    skills: List[str] = []
-    experience: List[ProfileExperience] = []
-    education: List[ProfileEducation] = []
-    projects: List[ProfileProject] = []
-    certifications: List[str] = []
-    awards: List[str] = []
+    name: str | None = None
+    contact: ProfileContact | None = None
+    skills: list[str] = []
+    experience: list[ProfileExperience] = []
+    education: list[ProfileEducation] = []
+    projects: list[ProfileProject] = []
+    certifications: list[str] = []
+    awards: list[str] = []
 
 
 class ResumeAnalysisResponse(ProfileStructured):
     """Structured resume analysis response."""
 
-    raw_text: Optional[str] = None
+    raw_text: str | None = None
     parse_error: bool = False
 
 
@@ -101,10 +100,10 @@ class ResumeFileResponse(BaseModel):
     """Response for file-based resume parsing."""
 
     markdown: str = ""
-    structured: Optional[ProfileStructured] = None
+    structured: ProfileStructured | None = None
     pages: int = 0
     success: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     structured_parse_error: bool = False
 
 
@@ -119,50 +118,50 @@ class GapAnalysisResponse(BaseModel):
     """Gap analysis response."""
 
     match_score: float = 0  # Changed from int to float
-    matching_skills: List[str] = []
-    missing_skills: List[str] = []
-    recommendations: List[str] = []
-    strengths: List[str] = []
-    areas_to_improve: List[str] = []
+    matching_skills: list[str] = []
+    missing_skills: list[str] = []
+    recommendations: list[str] = []
+    strengths: list[str] = []
+    areas_to_improve: list[str] = []
     # New detailed fields (optional)
-    jd_analysis: Optional[dict] = None
-    profile_skills: Optional[List[str]] = None
-    matching_required: Optional[List[str]] = None
-    missing_required: Optional[List[str]] = None
-    matching_preferred: Optional[List[str]] = None
-    missing_preferred: Optional[List[str]] = None
-    score_breakdown: Optional[dict] = None
+    jd_analysis: dict | None = None
+    profile_skills: list[str] | None = None
+    matching_required: list[str] | None = None
+    missing_required: list[str] | None = None
+    matching_preferred: list[str] | None = None
+    missing_preferred: list[str] | None = None
+    score_breakdown: dict | None = None
 
 
 class GitHubRepoSummary(BaseModel):
     name: str
-    language: Optional[str] = None
+    language: str | None = None
     stars: int = 0
 
 
 class GitHubDependencies(BaseModel):
-    python: List[str] = []
-    javascript: List[str] = []
-    other: List[str] = []
+    python: list[str] = []
+    javascript: list[str] = []
+    other: list[str] = []
 
 
 class GitHubAnalysisResponse(BaseModel):
     type: Literal["user_profile", "repository"]
-    username: Optional[str] = None
-    repo: Optional[str] = None
-    description: Optional[str] = None
-    stars: Optional[int] = None
-    total_repos: Optional[int] = None
-    repos_analyzed: List[GitHubRepoSummary] = []
-    languages: Dict[str, float] = {}
+    username: str | None = None
+    repo: str | None = None
+    description: str | None = None
+    stars: int | None = None
+    total_repos: int | None = None
+    repos_analyzed: list[GitHubRepoSummary] = []
+    languages: dict[str, float] = {}
     dependencies: GitHubDependencies = GitHubDependencies()
-    topics: List[str] = []
-    primary_language: Optional[str] = None
-    frameworks: List[str] = []
-    skill_level: Optional[str] = None
-    skills_identified: List[str] = []
-    code_patterns: List[str] = []
-    summary: Optional[str] = None
+    topics: list[str] = []
+    primary_language: str | None = None
+    frameworks: list[str] = []
+    skill_level: str | None = None
+    skills_identified: list[str] = []
+    code_patterns: list[str] = []
+    summary: str | None = None
 
 
 # ============ API Endpoints ============
@@ -192,18 +191,14 @@ async def analyze_resume_text(request: ResumeTextRequest):
     try:
         result = await nvidia_service.parse_resume(request.resume_text)
         if result.get("parse_error"):
-            return ResumeAnalysisResponse(
-                raw_text=result.get("raw_text"), parse_error=True
-            )
+            return ResumeAnalysisResponse(raw_text=result.get("raw_text"), parse_error=True)
         return ResumeAnalysisResponse(**result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}") from e
 
 
 @router.post("/resume/file", response_model=ResumeFileResponse)
-async def analyze_resume_file(
-    file: UploadFile = File(...), extract_structured: bool = True
-):
+async def analyze_resume_file(file: UploadFile = File(...), extract_structured: bool = True):
     """
     Upload and analyze a resume file (PDF or image).
 
@@ -246,9 +241,7 @@ async def analyze_resume_file(
                 parse_result["markdown"]
             )
 
-        structured_parse_error = bool(
-            structured_data and structured_data.get("parse_error")
-        )
+        structured_parse_error = bool(structured_data and structured_data.get("parse_error"))
         structured_profile = None
         if structured_data and not structured_parse_error:
             structured_profile = ProfileStructured(**structured_data)
@@ -265,7 +258,7 @@ async def analyze_resume_file(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}") from e
 
 
 @router.post("/github", response_model=GitHubAnalysisResponse)
@@ -333,14 +326,14 @@ async def analyze_github_repo(request: GitHubAnalysisRequest):
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         if "404" in str(e) or "Not Found" in str(e):
             raise HTTPException(
                 status_code=404,
                 detail="리포지토리 또는 사용자를 찾을 수 없습니다. 공개 계정인지 확인해주세요.",
-            )
-        raise HTTPException(status_code=500, detail=f"GitHub 분석 실패: {str(e)}")
+            ) from e
+        raise HTTPException(status_code=500, detail=f"GitHub 분석 실패: {str(e)}") from e
 
 
 @router.post("/gap", response_model=GapAnalysisResponse)
@@ -370,7 +363,7 @@ async def analyze_gap(request: GapAnalysisRequest):
             raise HTTPException(status_code=500, detail=result.get("error"))
         return GapAnalysisResponse(**result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gap analysis failed: {str(e)}") from e
 
 
 @router.post("/gap/unified")
@@ -422,9 +415,9 @@ async def analyze_gap_unified(request: GapAnalysisRequest):
         )
 
     except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unified gap analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unified gap analysis failed: {str(e)}") from e
 
 
 @router.post("/jd/url", response_model=JDScrapedResponse)
@@ -443,4 +436,4 @@ async def scrape_jd_from_url(request: JDUrlRequest):
         result = await jd_scraper_service.scrape_jd_from_url(request.url)
         return JDScrapedResponse(**result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Scraping failed: {str(e)}") from e

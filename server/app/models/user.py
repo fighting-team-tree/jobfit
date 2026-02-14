@@ -5,18 +5,19 @@ Pydantic models for Replit authentication.
 """
 
 from pydantic import BaseModel
-from typing import Optional
 
 
 class ReplitUser(BaseModel):
     """Authenticated Replit user."""
+
     user_id: str
     username: str
-    roles: Optional[str] = None
+    roles: str | None = None
 
 
 class OptionalUser(BaseModel):
     """Optional user for endpoints that work with or without auth."""
-    user_id: Optional[str] = None
-    username: Optional[str] = None
+
+    user_id: str | None = None
+    username: str | None = None
     is_authenticated: bool = False

@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
-from pathlib import Path
 import os
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Get the project root directory (.env is at project root)
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # CORS - includes Replit domains
-    BACKEND_CORS_ORIGINS: List[str] = [
+    BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://0.0.0.0:5173",
         "https://*.replit.dev",
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="ignore"
+        extra="ignore",
     )
 
     def __init__(self, **kwargs):
@@ -52,4 +52,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

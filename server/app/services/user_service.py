@@ -4,11 +4,10 @@ User Service
 Handles user creation and retrieval in database.
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
 from app.models.db_models import User
 from app.models.user import ReplitUser
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_or_create_user(db: AsyncSession, replit_user: ReplitUser) -> User:
@@ -23,9 +22,7 @@ async def get_or_create_user(db: AsyncSession, replit_user: ReplitUser) -> User:
         User model instance
     """
     # Try to find existing user
-    result = await db.execute(
-        select(User).where(User.id == replit_user.user_id)
-    )
+    result = await db.execute(select(User).where(User.id == replit_user.user_id))
     user = result.scalar_one_or_none()
 
     if user:

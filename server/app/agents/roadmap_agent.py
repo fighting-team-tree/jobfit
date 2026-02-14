@@ -6,14 +6,12 @@ Uses Claude API to create structured weekly learning plans.
 """
 
 import json
-from typing import TypedDict, List, Optional, Literal
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from anthropic import Anthropic
-
 from app.core.config import settings
-
 
 # ============ Data Classes ============
 
@@ -21,39 +19,42 @@ from app.core.config import settings
 @dataclass
 class Problem:
     """A practice problem for skill development."""
+
     id: str
     title: str
     description: str
     difficulty: Literal["easy", "medium", "hard"]
     problem_type: Literal["coding", "quiz", "practical"]
     skill: str
-    hints: List[str] = field(default_factory=list)
-    solution: Optional[str] = None
-    test_cases: List[dict] = field(default_factory=list)
+    hints: list[str] = field(default_factory=list)
+    solution: str | None = None
+    test_cases: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class WeekPlan:
     """A single week's learning plan."""
+
     week_number: int
     title: str
-    focus_skills: List[str]
-    learning_objectives: List[str]
-    resources: List[str]
-    problems: List[Problem] = field(default_factory=list)
+    focus_skills: list[str]
+    learning_objectives: list[str]
+    resources: list[str]
+    problems: list[Problem] = field(default_factory=list)
     estimated_hours: int = 10
 
 
 @dataclass
 class Roadmap:
     """Complete learning roadmap."""
+
     id: str
     title: str
     description: str
     total_weeks: int
-    weeks: List[WeekPlan]
-    missing_skills: List[str]
-    target_role: Optional[str] = None
+    weeks: list[WeekPlan]
+    missing_skills: list[str]
+    target_role: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
 
 
@@ -63,44 +64,44 @@ class Roadmap:
 class RoadmapAgent:
     """
     Agent for generating personalized learning roadmaps.
-    
+
     Uses Claude to:
     1. Analyze skill gaps
     2. Create structured weekly learning plans
     3. Generate practice problems for each week
     """
-    
+
     def __init__(self):
         """Initialize the agent with Claude client."""
         if not settings.ANTHROPIC_API_KEY:
             raise ValueError("ANTHROPIC_API_KEY is required")
-        
+
         self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = "claude-sonnet-4-20250514"
-    
+
     async def generate_roadmap(
         self,
-        missing_skills: List[str],
+        missing_skills: list[str],
         timeline_weeks: int = 4,
-        target_role: Optional[str] = None,
-        current_level: str = "intermediate"
+        target_role: str | None = None,
+        current_level: str = "intermediate",
     ) -> Roadmap:
         """
         Generate a personalized learning roadmap.
-        
+
         Args:
             missing_skills: List of skills to learn
             timeline_weeks: Number of weeks for the roadmap
             target_role: Target job role (optional)
             current_level: Current skill level (beginner/intermediate/advanced)
-            
+
         Returns:
             Roadmap with weekly learning plans
         """
         prompt = f"""Create a detailed {timeline_weeks}-week learning roadmap to acquire these skills:
 
 Skills to learn: {missing_skills}
-Target role: {target_role or 'General software development'}
+Target role: {target_role or "General software development"}
 Current level: {current_level}
 
 Return a JSON object:
@@ -129,19 +130,17 @@ Return ONLY the JSON."""
 
         try:
             response = self.client.messages.create(
-                model=self.model,
-                max_tokens=3000,
-                messages=[{"role": "user", "content": prompt}]
+                model=self.model, max_tokens=3000, messages=[{"role": "user", "content": prompt}]
             )
-            
+
             content = response.content[0].text.strip()
             if content.startswith("```"):
                 content = content.split("```")[1]
                 if content.startswith("json"):
                     content = content[4:]
-            
+
             roadmap_data = json.loads(content)
-            
+
             # Convert to Roadmap dataclass
             weeks = []
             for week_data in roadmap_data.get("weeks", []):
@@ -152,10 +151,10 @@ Return ONLY the JSON."""
                     learning_objectives=week_data.get("learning_objectives", []),
                     resources=week_data.get("resources", []),
                     estimated_hours=week_data.get("estimated_hours", 10),
-                    problems=[]
+                    problems=[],
                 )
                 weeks.append(week)
-            
+
             roadmap = Roadmap(
                 id=f"roadmap_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 title=roadmap_data.get("title", "Learning Roadmap"),
@@ -163,26 +162,22 @@ Return ONLY the JSON."""
                 total_weeks=len(weeks),
                 weeks=weeks,
                 missing_skills=missing_skills,
-                target_role=target_role
+                target_role=target_role,
             )
-            
+
             return roadmap
-            
+
         except Exception as e:
-            raise ValueError(f"Roadmap generation failed: {str(e)}")
-    
-    async def generate_week_problems(
-        self,
-        week: WeekPlan,
-        num_problems: int = 3
-    ) -> List[Problem]:
+            raise ValueError(f"Roadmap generation failed: {str(e)}") from e
+
+    async def generate_week_problems(self, week: WeekPlan, num_problems: int = 3) -> list[Problem]:
         """
         Generate practice problems for a specific week.
-        
+
         Args:
             week: The week plan to generate problems for
             num_problems: Number of problems to generate
-            
+
         Returns:
             List of Problem objects
         """
@@ -217,48 +212,45 @@ Return ONLY the JSON array."""
 
         try:
             response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
+                model=self.model, max_tokens=2000, messages=[{"role": "user", "content": prompt}]
             )
-            
+
             content = response.content[0].text.strip()
             if content.startswith("```"):
                 content = content.split("```")[1]
                 if content.startswith("json"):
                     content = content[4:]
-            
+
             problems_data = json.loads(content)
-            
+
             problems = []
             for i, p_data in enumerate(problems_data):
                 problem = Problem(
-                    id=f"prob_{week.week_number}_{i+1}_{datetime.now().strftime('%H%M%S')}",
-                    title=p_data.get("title", f"Problem {i+1}"),
+                    id=f"prob_{week.week_number}_{i + 1}_{datetime.now().strftime('%H%M%S')}",
+                    title=p_data.get("title", f"Problem {i + 1}"),
                     description=p_data.get("description", ""),
                     difficulty=p_data.get("difficulty", "medium"),
                     problem_type=p_data.get("problem_type", "coding"),
-                    skill=p_data.get("skill", week.focus_skills[0] if week.focus_skills else "general"),
+                    skill=p_data.get(
+                        "skill", week.focus_skills[0] if week.focus_skills else "general"
+                    ),
                     hints=p_data.get("hints", []),
-                    test_cases=p_data.get("test_cases", [])
+                    test_cases=p_data.get("test_cases", []),
                 )
                 problems.append(problem)
-            
+
             return problems
-            
+
         except Exception as e:
-            raise ValueError(f"Problem generation failed: {str(e)}")
-    
-    async def generate_problem_solution(
-        self,
-        problem: Problem
-    ) -> str:
+            raise ValueError(f"Problem generation failed: {str(e)}") from e
+
+    async def generate_problem_solution(self, problem: Problem) -> str:
         """
         Generate a solution for a practice problem.
-        
+
         Args:
             problem: The problem to solve
-            
+
         Returns:
             Solution code or explanation
         """
@@ -282,19 +274,17 @@ Format your response clearly with code blocks where appropriate."""
 
         try:
             response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
+                model=self.model, max_tokens=2000, messages=[{"role": "user", "content": prompt}]
             )
-            
+
             return response.content[0].text.strip()
-            
+
         except Exception as e:
             return f"Solution generation failed: {str(e)}"
 
 
 # Singleton instance
-roadmap_agent: Optional[RoadmapAgent] = None
+roadmap_agent: RoadmapAgent | None = None
 
 
 def get_roadmap_agent() -> RoadmapAgent:

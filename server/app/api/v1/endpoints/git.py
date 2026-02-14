@@ -5,11 +5,9 @@ Handles GitHub integration for auto-pushing solutions.
 Token is passed per-request for security (not stored server-side).
 """
 
-from fastapi import APIRouter, HTTPException, Header
-from pydantic import BaseModel
-from typing import Optional, List
-
 from app.services.git_push_service import git_push_service
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -19,26 +17,30 @@ router = APIRouter()
 
 class ValidateTokenRequest(BaseModel):
     """Request to validate GitHub token."""
+
     token: str
 
 
 class ValidateTokenResponse(BaseModel):
     """Response for token validation."""
+
     valid: bool
-    username: Optional[str] = None
-    name: Optional[str] = None
-    avatar_url: Optional[str] = None
-    repos_count: Optional[int] = None
-    error: Optional[str] = None
+    username: str | None = None
+    name: str | None = None
+    avatar_url: str | None = None
+    repos_count: int | None = None
+    error: str | None = None
 
 
 class ListReposRequest(BaseModel):
     """Request to list repositories."""
+
     token: str
 
 
 class RepoInfo(BaseModel):
     """Repository information."""
+
     full_name: str
     name: str
     private: bool
@@ -48,13 +50,15 @@ class RepoInfo(BaseModel):
 
 class ListReposResponse(BaseModel):
     """Response for list repositories."""
+
     success: bool
-    repos: List[RepoInfo] = []
-    error: Optional[str] = None
+    repos: list[RepoInfo] = []
+    error: str | None = None
 
 
 class PushSolutionRequest(BaseModel):
     """Request to push a solution."""
+
     token: str
     repo_full_name: str
     week: int
@@ -67,23 +71,25 @@ class PushSolutionRequest(BaseModel):
 
 class PushProblemRequest(BaseModel):
     """Request to push a problem."""
+
     token: str
     repo_full_name: str
     week: int
     problem_id: str
     problem_title: str
     problem_description: str
-    starter_code: Optional[str] = None
+    starter_code: str | None = None
     branch: str = "main"
 
 
 class PushResponse(BaseModel):
     """Response for push operations."""
+
     success: bool
-    commit_sha: Optional[str] = None
-    commit_url: Optional[str] = None
-    file_url: Optional[str] = None
-    error: Optional[str] = None
+    commit_sha: str | None = None
+    commit_url: str | None = None
+    file_url: str | None = None
+    error: str | None = None
 
 
 # ============ API Endpoints ============
@@ -93,7 +99,7 @@ class PushResponse(BaseModel):
 async def validate_token(request: ValidateTokenRequest) -> ValidateTokenResponse:
     """
     Validate a GitHub Personal Access Token.
-    
+
     Returns user info if valid, error otherwise.
     """
     result = await git_push_service.validate_token(request.token)
@@ -104,14 +110,14 @@ async def validate_token(request: ValidateTokenRequest) -> ValidateTokenResponse
 async def list_repositories(request: ListReposRequest) -> ListReposResponse:
     """
     List repositories accessible with the provided token.
-    
+
     Returns up to 20 most recently updated repositories.
     """
     result = await git_push_service.list_repos(request.token)
-    
+
     if not result.get("success"):
         return ListReposResponse(success=False, error=result.get("error"))
-    
+
     repos = [RepoInfo(**r) for r in result.get("repos", [])]
     return ListReposResponse(success=True, repos=repos)
 
@@ -120,9 +126,9 @@ async def list_repositories(request: ListReposRequest) -> ListReposResponse:
 async def push_solution(request: PushSolutionRequest) -> PushResponse:
     """
     Push a problem solution to GitHub.
-    
+
     Creates file at: solutions/week{N}/{problem_id}.{ext}
-    
+
     - **token**: GitHub Personal Access Token (not stored)
     - **repo_full_name**: Repository in format "owner/repo"
     - **week**: Week number for organizing files
@@ -140,15 +146,15 @@ async def push_solution(request: PushSolutionRequest) -> PushResponse:
         problem_title=request.problem_title,
         solution_code=request.solution_code,
         language=request.language,
-        branch=request.branch
+        branch=request.branch,
     )
-    
+
     return PushResponse(
         success=result.success,
         commit_sha=result.commit_sha,
         commit_url=result.commit_url,
         file_url=result.file_url,
-        error=result.error
+        error=result.error,
     )
 
 
@@ -156,9 +162,9 @@ async def push_solution(request: PushSolutionRequest) -> PushResponse:
 async def push_problem(request: PushProblemRequest) -> PushResponse:
     """
     Push a problem file to GitHub.
-    
+
     Creates file at: problems/week{N}/{problem_id}.md
-    
+
     - **token**: GitHub Personal Access Token
     - **repo_full_name**: Repository in format "owner/repo"
     - **week**: Week number
@@ -176,13 +182,13 @@ async def push_problem(request: PushProblemRequest) -> PushResponse:
         problem_title=request.problem_title,
         problem_description=request.problem_description,
         starter_code=request.starter_code,
-        branch=request.branch
+        branch=request.branch,
     )
-    
+
     return PushResponse(
         success=result.success,
         commit_sha=result.commit_sha,
         commit_url=result.commit_url,
         file_url=result.file_url,
-        error=result.error
+        error=result.error,
     )

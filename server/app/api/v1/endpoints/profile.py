@@ -4,18 +4,15 @@ Profile API Endpoints
 User profile CRUD operations with server-side persistence.
 """
 
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
-from app.core.database import get_db
 from app.core.auth import get_optional_user
-from app.models.user import ReplitUser, OptionalUser
-from app.models.db_models import UserProfile, User
+from app.core.database import get_db
+from app.models.db_models import UserProfile
+from app.models.user import OptionalUser, ReplitUser
 from app.services.user_service import get_or_create_user
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -26,25 +23,28 @@ profiles_store: dict = {}
 
 # ============ Request/Response Models ============
 
+
 class ProfileSaveRequest(BaseModel):
     """Request body for saving profile data."""
-    profile_data: Optional[dict] = None
-    resume_file_result: Optional[dict] = None
-    github_analysis: Optional[dict] = None
-    gap_analysis: Optional[dict] = None
-    jd_text: Optional[str] = None
-    github_url: Optional[str] = None
+
+    profile_data: dict | None = None
+    resume_file_result: dict | None = None
+    github_analysis: dict | None = None
+    gap_analysis: dict | None = None
+    jd_text: str | None = None
+    github_url: str | None = None
 
 
 class ProfileResponse(BaseModel):
     """Response for profile data."""
+
     user_id: str
-    profile_data: Optional[dict] = None
-    resume_file_result: Optional[dict] = None
-    github_analysis: Optional[dict] = None
-    gap_analysis: Optional[dict] = None
-    jd_text: Optional[str] = None
-    github_url: Optional[str] = None
+    profile_data: dict | None = None
+    resume_file_result: dict | None = None
+    github_analysis: dict | None = None
+    gap_analysis: dict | None = None
+    jd_text: str | None = None
+    github_url: str | None = None
 
     class Config:
         from_attributes = True
@@ -52,7 +52,8 @@ class ProfileResponse(BaseModel):
 
 # ============ Helper Functions ============
 
-def use_database(db: Optional[AsyncSession], user: OptionalUser) -> bool:
+
+def use_database(db: AsyncSession | None, user: OptionalUser) -> bool:
     """Check if we should use database mode."""
     return db is not None and user.is_authenticated
 
@@ -85,10 +86,11 @@ def profile_dict_to_response(profile: dict, user_id: str) -> ProfileResponse:
 
 # ============ Endpoints ============
 
+
 @router.get("/me", response_model=ProfileResponse)
 async def get_my_profile(
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """
     Get current user's profile data.
@@ -98,9 +100,7 @@ async def get_my_profile(
     """
     # Database mode
     if use_database(db, user):
-        result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == user.user_id)
-        )
+        result = await db.execute(select(UserProfile).where(UserProfile.user_id == user.user_id))
         user_profile = result.scalar_one_or_none()
 
         if not user_profile:
@@ -112,7 +112,7 @@ async def get_my_profile(
                 github_analysis=None,
                 gap_analysis=None,
                 jd_text=None,
-                github_url=None
+                github_url=None,
             )
 
         return profile_model_to_response(user_profile, user.user_id)
@@ -127,7 +127,7 @@ async def get_my_profile(
 async def save_my_profile(
     data: ProfileSaveRequest,
     user: OptionalUser = Depends(get_optional_user),
-    db: Optional[AsyncSession] = Depends(get_db),
+    db: AsyncSession | None = Depends(get_db),
 ):
     """
     Save or update current user's profile data.
@@ -142,9 +142,7 @@ async def save_my_profile(
         await get_or_create_user(db, replit_user)
 
         # Get or create profile
-        result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == user.user_id)
-        )
+        result = await db.execute(select(UserProfile).where(UserProfile.user_id == user.user_id))
         user_profile = result.scalar_one_or_none()
 
         if not user_profile:

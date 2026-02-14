@@ -4,13 +4,13 @@ Database Configuration for Replit PostgreSQL
 Async SQLAlchemy setup with asyncpg driver.
 """
 
-from typing import AsyncGenerator, Optional
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from collections.abc import AsyncGenerator
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 # Import settings to ensure .env is loaded first
 from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 # Replit PostgreSQL URL from settings
 DATABASE_URL = settings.DATABASE_URL
@@ -50,7 +50,7 @@ if DATABASE_URL:
 Base = declarative_base()
 
 
-async def get_db() -> AsyncGenerator[Optional[AsyncSession], None]:
+async def get_db() -> AsyncGenerator[AsyncSession | None, None]:
     """
     Dependency for getting async database session.
 

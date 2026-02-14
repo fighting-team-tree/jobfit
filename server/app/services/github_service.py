@@ -6,8 +6,6 @@ GitHub 리포지토리 분석 서비스
 """
 
 import httpx
-import re
-from typing import Optional, List
 from app.core.config import settings
 
 
@@ -66,7 +64,7 @@ class GitHubService:
             repo = parts[1].replace(".git", "")
             return {"type": "repo", "owner": owner, "repo": repo}
 
-    async def get_user_repos(self, username: str, limit: int = 10) -> List[dict]:
+    async def get_user_repos(self, username: str, limit: int = 10) -> list[dict]:
         """사용자의 공개 리포지토리 목록을 조회합니다."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
@@ -93,9 +91,7 @@ class GitHubService:
     async def get_repo_info(self, owner: str, repo: str) -> dict:
         """리포지토리 메타데이터를 조회합니다."""
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{self.BASE_URL}/repos/{owner}/{repo}", headers=self.headers
-            )
+            resp = await client.get(f"{self.BASE_URL}/repos/{owner}/{repo}", headers=self.headers)
             resp.raise_for_status()
             data = resp.json()
 
@@ -124,7 +120,7 @@ class GitHubService:
                 for lang, bytes_count in lang_bytes.items()
             }
 
-    async def get_readme(self, owner: str, repo: str) -> Optional[str]:
+    async def get_readme(self, owner: str, repo: str) -> str | None:
         """README 내용을 조회합니다."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
@@ -242,11 +238,7 @@ class GitHubService:
 
                 repo_full = await self.get_repo_info(owner, repo_name)
                 default_branch = repo_full.get("default_branch", "main")
-                languages = (
-                    await self.get_languages(owner, repo_name)
-                    if include_languages
-                    else {}
-                )
+                languages = await self.get_languages(owner, repo_name) if include_languages else {}
                 deps = (
                     await self.get_dependency_files(owner, repo_name, default_branch)
                     if include_dependencies

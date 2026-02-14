@@ -4,26 +4,25 @@ Auth API Endpoints
 Handles Replit authentication status.
 """
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from typing import Optional
-
 from app.core.auth import get_optional_user
 from app.models.user import OptionalUser
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
 class AuthStatusResponse(BaseModel):
     """Response for auth status check."""
+
     authenticated: bool
-    user_id: Optional[str] = None
-    username: Optional[str] = None
+    user_id: str | None = None
+    username: str | None = None
 
 
 @router.get("/me", response_model=AuthStatusResponse)
 async def get_current_user_info(
-    user: OptionalUser = Depends(get_optional_user)
+    user: OptionalUser = Depends(get_optional_user),
 ) -> AuthStatusResponse:
     """
     Get current user information.
