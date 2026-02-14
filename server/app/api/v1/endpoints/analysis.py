@@ -6,8 +6,9 @@ Handles resume parsing, GitHub analysis, and gap analysis.
 
 from typing import Literal
 
+from app.core.config import settings
 from app.services.jd_scraper_service import jd_scraper_service
-from app.services.nvidia_service import nvidia_service
+from app.services.llm_service import llm_service
 from app.services.resume_parser_service import resume_parser_service
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -189,7 +190,7 @@ async def analyze_resume_text(request: ResumeTextRequest):
         )
 
     try:
-        result = await nvidia_service.parse_resume(request.resume_text)
+        result = await llm_service.parse_resume(request.resume_text)
         if result.get("parse_error"):
             return ResumeAnalysisResponse(raw_text=result.get("raw_text"), parse_error=True)
         return ResumeAnalysisResponse(**result)
@@ -221,6 +222,30 @@ async def analyze_resume_file(file: UploadFile = File(...), extract_structured: 
         )
 
     try:
+        # TEST_MODE: fixture 프로필 바로 반환
+        if settings.TEST_MODE:
+            from app.services.fixture_service import get_fixture_profile
+
+            # 파일명에서 이름 추출 시도
+            name_hint = file.filename.split(".")[0] if file.filename else ""
+            fixture = get_fixture_profile(name_hint)
+            if not fixture:
+                from app.services.fixture_service import get_fixture_profiles
+
+                profiles = get_fixture_profiles()
+                fixture = profiles[0] if profiles else None
+
+            if fixture:
+                structured_profile = ProfileStructured(**fixture)
+                return ResumeFileResponse(
+                    markdown=f"[TEST_MODE] Fixture profile: {fixture.get('name', 'unknown')}",
+                    structured=structured_profile,
+                    pages=1,
+                    success=True,
+                    error=None,
+                    structured_parse_error=False,
+                )
+
         content = await file.read()
 
         # Parse file using VLM
@@ -286,8 +311,8 @@ async def analyze_github_repo(request: GitHubAnalysisRequest):
             include_languages=request.include_languages,
         )
 
-        # Step 2: NVIDIA LLM으로 스킬 추론
-        skills_analysis = await nvidia_service.infer_skills_from_github(
+        # Step 2: LLM으로 스킬 추론
+        skills_analysis = await llm_service.infer_skills_from_github(
             languages=repo_data.get("languages", {}),
             dependencies=repo_data.get("dependencies", {}),
             readme_excerpt=repo_data.get("readme_excerpt") or "",
@@ -358,7 +383,7 @@ async def analyze_gap(request: GapAnalysisRequest):
             if hasattr(request.profile, "model_dump")
             else request.profile.dict()
         )
-        result = await nvidia_service.analyze_gap(profile_payload, request.jd_text)
+        result = await llm_service.analyze_gap(profile_payload, request.jd_text)
         if result.get("error"):
             raise HTTPException(status_code=500, detail=result.get("error"))
         return GapAnalysisResponse(**result)

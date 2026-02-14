@@ -1,0 +1,82 @@
+{
+  "name": "김테크",
+  "contact": {
+    "email": "[EMAIL_REDACTED]",
+    "phone": "[PHONE_REDACTED]",
+    "github": "https://github.com/kimtech",
+    "blog": null
+  },
+  "skills": [
+    "Python", "C++", "PyTorch", "TensorFlow",
+    "Computer Vision", "Object Detection", "Image Segmentation",
+    "LLM", "Fine-tuning", "Llama-3", "VLM",
+    "LangChain", "RAG", "Prompt Engineering",
+    "FastAPI", "Docker", "Kubernetes",
+    "ROS2", "Robot Control", "SLAM",
+    "Git", "Linux", "AWS", "GCP"
+  ],
+  "experience": [
+    {
+      "company": "AI 로보틱스 스타트업",
+      "role": "Senior AI Engineer",
+      "duration": "2022.03 - 현재 (2년)",
+      "description": "VLM 기반 로봇 제어 시스템 개발. Llama-3 70B 파인튜닝으로 로봇 명령어 이해 정확도 40% 향상. LangChain + RAG 파이프라인으로 기술 문서 Q&A 시스템 구축."
+    },
+    {
+      "company": "네이버 AI Lab",
+      "role": "AI Engineer",
+      "duration": "2020.01 - 2022.02 (2년 2개월)",
+      "description": "Computer Vision 모델 개발 및 서비스 배포. YOLO/EfficientNet 기반 상품 인식 시스템. TensorRT 최적화로 추론 속도 3배 향상."
+    },
+    {
+      "company": "삼성전자 무선사업부",
+      "role": "SW Engineer",
+      "duration": "2018.03 - 2019.12 (1년 10개월)",
+      "description": "카메라 ISP 영상처리 파이프라인 개발. C++ 기반 실시간 노이즈 제거 알고리즘 구현."
+    }
+  ],
+  "education": [
+    {
+      "school": "KAIST",
+      "degree": "석사",
+      "major": "전산학부 (컴퓨터비전 연구실)",
+      "year": "2018",
+      "gpa": "4.0/4.3"
+    },
+    {
+      "school": "서울대학교",
+      "degree": "학사",
+      "major": "컴퓨터공학부",
+      "year": "2016",
+      "gpa": "3.8/4.3"
+    }
+  ],
+  "projects": [
+    {
+      "name": "VLM 로봇 내비게이션",
+      "description": "Vision-Language Model을 활용한 자율 로봇 내비게이션 시스템. 자연어 명령을 이해하고 실시간 환경 인식 기반 경로 탐색.",
+      "tech_stack": ["PyTorch", "Llama-3", "ROS2", "SLAM", "Docker"],
+      "role": "Tech Lead"
+    },
+    {
+      "name": "RAG 기반 기술문서 Q&A",
+      "description": "사내 기술 문서 10만건을 대상으로 LangChain + ChromaDB RAG 파이프라인 구축. 응답 정확도 85% 달성.",
+      "tech_stack": ["LangChain", "ChromaDB", "FastAPI", "Python"],
+      "role": "개발 리드"
+    },
+    {
+      "name": "실시간 상품 인식 서비스",
+      "description": "모바일 카메라로 상품을 인식하여 가격 비교 정보를 제공하는 서비스. 일 100만 요청 처리.",
+      "tech_stack": ["PyTorch", "YOLO", "TensorRT", "Kubernetes", "GCP"],
+      "role": "ML Engineer"
+    }
+  ],
+  "certifications": [
+    "정보처리기사",
+    "AWS Solutions Architect Associate"
+  ],
+  "awards": [
+    "네이버 사내 해커톤 대상 (2021)",
+    "KAIST 우수논문상 (2018)"
+  ]
+}

@@ -11,7 +11,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.services.elevenlabs_service import elevenlabs_service
-from app.services.nvidia_service import nvidia_service
+from app.services.llm_service import llm_service
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
@@ -95,7 +95,7 @@ async def start_interview(request: StartInterviewRequest):
 
     # Generate first question with fallback
     try:
-        first_question = await nvidia_service.generate_interview_question(
+        first_question = await llm_service.generate_interview_question(
             profile=request.profile,
             jd_text=request.jd_text,
             conversation_history=[],
@@ -171,7 +171,7 @@ async def respond_to_question(
 
     # Generate next question
     try:
-        next_question = await nvidia_service.generate_interview_question(
+        next_question = await llm_service.generate_interview_question(
             profile=session.profile,
             jd_text=session.jd_text,
             conversation_history=session.conversation_history,
@@ -381,7 +381,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
         await websocket.send_json({"type": "status", "content": "생각 중..."})
 
         try:
-            next_question = await nvidia_service.generate_interview_question(
+            next_question = await llm_service.generate_interview_question(
                 profile=session.profile,
                 jd_text=session.jd_text,
                 conversation_history=session.conversation_history,

@@ -1,7 +1,8 @@
 """
 Resume Parsing Service
 
-Parses PDF/image resumes using NVIDIA VLM and extracts structured information.
+Parses PDF/image resumes using VLM (via OpenAI SDK) and extracts structured information.
+Supports Gemini and OpenAI providers.
 """
 
 import base64
@@ -9,7 +10,7 @@ import io
 import json
 import re
 
-import httpx
+from openai import AsyncOpenAI
 from PIL import Image
 
 try:
@@ -36,17 +37,22 @@ def mask_pii(text: str) -> str:
 
 
 class ResumeParserService:
-    """Service for parsing resumes from PDF/image files using NVIDIA VLM."""
-
-    API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+    """Service for parsing resumes from PDF/image files using VLM (OpenAI SDK)."""
 
     def __init__(self):
-        self.api_key = settings.NVIDIA_API_KEY
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
+        provider = settings.LLM_PROVIDER
+
+        if provider == "gemini":
+            self.client = AsyncOpenAI(
+                api_key=settings.GOOGLE_API_KEY,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            self.vision_model = settings.LLM_MODEL or "gemini-2.0-flash"
+            self.text_model = settings.LLM_MODEL or "gemini-2.0-flash"
+        else:  # openai
+            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            self.vision_model = settings.LLM_MODEL or "gpt-4o-mini"
+            self.text_model = settings.LLM_MODEL or "gpt-4o-mini"
 
     def _extract_images_from_pdf(self, pdf_bytes: bytes) -> list[str]:
         """Extract pages from PDF as base64 images."""
@@ -117,11 +123,11 @@ class ResumeParserService:
             # Parse each page
             all_contents = []
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                for i, b64 in enumerate(base64_images):
-                    payload = {
-                        "model": "meta/llama-3.2-90b-vision-instruct",
-                        "messages": [
+            for i, b64 in enumerate(base64_images):
+                try:
+                    response = await self.client.chat.completions.create(
+                        model=self.vision_model,
+                        messages=[
                             {
                                 "role": "user",
                                 "content": [
@@ -136,20 +142,14 @@ class ResumeParserService:
                                 ],
                             }
                         ],
-                        "max_tokens": 4096,
-                        "temperature": 0.1,
-                    }
-
-                    response = await client.post(self.API_URL, headers=self.headers, json=payload)
-
-                    if response.status_code == 200:
-                        result = response.json()
-                        page_content = result["choices"][0]["message"].get("content")
-                        if page_content:
-                            all_contents.append(page_content)
-                    else:
-                        # Log error but continue with other pages
-                        print(f"Error parsing page {i + 1}: {response.status_code}")
+                        max_tokens=4096,
+                        temperature=0.1,
+                    )
+                    page_content = response.choices[0].message.content
+                    if page_content:
+                        all_contents.append(page_content)
+                except Exception as e:
+                    print(f"Error parsing page {i + 1}: {e}")
 
             if not all_contents:
                 return {
@@ -209,29 +209,21 @@ class ResumeParserService:
 
 JSON만 응답하세요."""
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                self.API_URL,
-                headers=self.headers,
-                json={
-                    "model": "meta/llama-3.1-70b-instruct",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a resume parsing assistant. Always respond with valid JSON only.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 3000,
-                },
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.text_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a resume parsing assistant. Always respond with valid JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=3000,
             )
 
-            if response.status_code != 200:
-                return {"parse_error": True, "error": f"API error: {response.status_code}"}
-
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
+            content = response.choices[0].message.content
 
             try:
                 # Clean up potential markdown code blocks
@@ -242,6 +234,9 @@ JSON만 응답하세요."""
                 return json.loads(content.strip())
             except json.JSONDecodeError:
                 return {"raw_text": content, "parse_error": True}
+
+        except Exception as e:
+            return {"parse_error": True, "error": str(e)}
 
 
 # Singleton instance

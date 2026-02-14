@@ -1,26 +1,31 @@
 """
 Embedding Service
 
-Uses NVIDIA NV-Embed API for text embedding and vector similarity calculations.
+Uses OpenAI SDK for text embedding (supports Gemini and OpenAI providers).
 """
 
-import httpx
 import numpy as np
+from openai import AsyncOpenAI
+
 from app.core.config import settings
 
 
 class EmbeddingService:
-    """Service for generating text embeddings using NVIDIA NV-Embed API."""
-
-    BASE_URL = "https://integrate.api.nvidia.com/v1"
-    MODEL = "nvidia/nv-embedqa-e5-v5"
+    """Service for generating text embeddings using OpenAI-compatible API."""
 
     def __init__(self):
-        self.api_key = settings.NVIDIA_API_KEY
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        provider = settings.LLM_PROVIDER
+
+        if provider == "gemini":
+            self.client = AsyncOpenAI(
+                api_key=settings.GOOGLE_API_KEY,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            self.model = settings.EMBEDDING_MODEL or "text-embedding-004"
+        else:  # openai
+            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            self.model = settings.EMBEDDING_MODEL or "text-embedding-3-small"
+
         # Simple in-memory cache for embeddings
         self._cache: dict[str, np.ndarray] = {}
 
@@ -30,7 +35,7 @@ class EmbeddingService:
 
         Args:
             texts: List of texts to embed
-            input_type: "query" or "passage" (NVIDIA API Param)
+            input_type: "query" or "passage" (kept for API compatibility, not used by OpenAI SDK)
 
         Returns:
             numpy array of shape (len(texts), embedding_dim)
@@ -66,25 +71,15 @@ class EmbeddingService:
         return np.array([emb for _, emb in cached_results])
 
     async def _fetch_embeddings(self, texts: list[str], input_type: str) -> list[np.ndarray]:
-        """Fetch embeddings from NVIDIA API."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{self.BASE_URL}/embeddings",
-                headers=self.headers,
-                json={
-                    "model": self.MODEL,
-                    "input": texts,
-                    "input_type": input_type,
-                    "encoding_format": "float",
-                    "truncate": "END",
-                },
-            )
-            response.raise_for_status()
-            result = response.json()
+        """Fetch embeddings using OpenAI SDK."""
+        response = await self.client.embeddings.create(
+            model=self.model,
+            input=texts,
+        )
 
-            # Sort by index to maintain order
-            data = sorted(result["data"], key=lambda x: x["index"])
-            return [np.array(d["embedding"]) for d in data]
+        # Sort by index to maintain order
+        data = sorted(response.data, key=lambda x: x.index)
+        return [np.array(d.embedding) for d in data]
 
     def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         """

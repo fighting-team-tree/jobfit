@@ -19,6 +19,10 @@ class Settings(BaseSettings):
         "https://*.repl.co",
     ]
 
+    # Provider 선택: "gemini" | "openai"
+    LLM_PROVIDER: str = "gemini"
+    TEST_MODE: bool = False
+
     # AI Keys
     NVIDIA_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
@@ -26,6 +30,11 @@ class Settings(BaseSettings):
     DEEPGRAM_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
+
+    # 모델명 override (비어있으면 provider 기본값 사용)
+    LLM_MODEL: str = ""
+    EMBEDDING_MODEL: str = ""
 
     # GitHub API
     GITHUB_TOKEN: str = ""

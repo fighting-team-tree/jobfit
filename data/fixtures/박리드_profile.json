@@ -1,0 +1,85 @@
+{
+  "name": "박리드",
+  "contact": {
+    "email": "[EMAIL_REDACTED]",
+    "phone": "[PHONE_REDACTED]",
+    "github": "https://github.com/parklead",
+    "blog": "https://parklead.tech"
+  },
+  "skills": [
+    "Python", "C++", "Rust",
+    "PyTorch", "TensorFlow", "JAX",
+    "Robotics", "ROS2", "SLAM", "Motion Planning",
+    "Computer Vision", "3D Reconstruction", "Point Cloud",
+    "Reinforcement Learning", "Sim-to-Real Transfer",
+    "System Architecture", "Distributed Systems",
+    "Docker", "Kubernetes", "Terraform",
+    "AWS", "GCP", "CI/CD",
+    "Technical Leadership", "Mentoring"
+  ],
+  "experience": [
+    {
+      "company": "현대로보틱스",
+      "role": "Staff AI Engineer / Tech Lead",
+      "duration": "2020.01 - 현재 (4년)",
+      "description": "로보틱스 AI 플랫폼 아키텍처 설계 및 팀 리딩 (8명). Sim-to-Real Transfer 파이프라인 구축으로 로봇 학습 효율 5배 향상. 강화학습 기반 매니퓰레이션 시스템 설계."
+    },
+    {
+      "company": "네이버랩스",
+      "role": "Senior Robotics Engineer",
+      "duration": "2016.03 - 2019.12 (3년 10개월)",
+      "description": "실내 자율주행 로봇 AROUND 개발. 3D LiDAR SLAM 및 경로 계획 알고리즘 설계. Point Cloud 기반 물체 인식 시스템 구축."
+    },
+    {
+      "company": "LG전자 로봇사업부",
+      "role": "Robotics SW Engineer",
+      "duration": "2012.07 - 2016.02 (3년 8개월)",
+      "description": "서비스 로봇 소프트웨어 개발. ROS 기반 내비게이션 스택 구현. 임베디드 리눅스 환경 최적화."
+    }
+  ],
+  "education": [
+    {
+      "school": "서울대학교",
+      "degree": "박사",
+      "major": "기계항공공학부 (로보틱스 연구실)",
+      "year": "2012",
+      "gpa": "4.1/4.3"
+    },
+    {
+      "school": "서울대학교",
+      "degree": "학사",
+      "major": "기계항공공학부",
+      "year": "2008",
+      "gpa": "3.9/4.3"
+    }
+  ],
+  "projects": [
+    {
+      "name": "Sim-to-Real 로봇 학습 플랫폼",
+      "description": "Isaac Sim 기반 시뮬레이션에서 학습한 정책을 실제 로봇에 전이하는 플랫폼. 도메인 랜덤화 + Progressive Transfer로 성공률 90% 달성.",
+      "tech_stack": ["PyTorch", "Isaac Sim", "ROS2", "Docker", "Kubernetes"],
+      "role": "Architect & Lead"
+    },
+    {
+      "name": "3D Point Cloud 물체 인식",
+      "description": "LiDAR 데이터 기반 실시간 3D 물체 검출 및 추적 시스템. PointNet++ 커스텀 모델로 mAP 82% 달성.",
+      "tech_stack": ["PyTorch", "PointNet++", "C++", "ROS2", "CUDA"],
+      "role": "Tech Lead"
+    },
+    {
+      "name": "멀티 로봇 협업 시스템",
+      "description": "4대 로봇의 협업 물류 시스템. 분산 경로 계획 및 충돌 회피 알고리즘 설계.",
+      "tech_stack": ["Python", "ROS2", "gRPC", "Redis", "Docker"],
+      "role": "System Architect"
+    }
+  ],
+  "certifications": [
+    "정보처리기사",
+    "AWS Solutions Architect Professional"
+  ],
+  "awards": [
+    "현대로보틱스 올해의 엔지니어 (2022)",
+    "IROS 2011 Best Paper Finalist",
+    "서울대 우수박사논문상 (2012)"
+  ]
+}

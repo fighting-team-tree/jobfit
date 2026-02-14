@@ -1,8 +1,8 @@
 """
 Problem Generator
 
-Generates practice problems for skill development using NVIDIA NIM API.
-Uses Qwen2.5-Coder-32B-Instruct model optimized for code generation.
+Generates practice problems for skill development using OpenAI-compatible API.
+Supports Gemini and OpenAI providers.
 """
 
 import json
@@ -10,7 +10,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-import httpx
+from openai import AsyncOpenAI
+
 from app.core.config import settings
 
 
@@ -34,9 +35,9 @@ class GeneratedProblem:
 
 class ProblemGenerator:
     """
-    Generates practice problems for skill development using NVIDIA NIM API.
+    Generates practice problems for skill development using OpenAI-compatible API.
 
-    Uses Qwen2.5-Coder-32B-Instruct for reliable code problem generation.
+    Supports Gemini (via OpenAI compat) and OpenAI directly.
 
     Supports:
     - Coding challenges with test cases
@@ -44,20 +45,23 @@ class ProblemGenerator:
     - Practical exercises
     """
 
-    BASE_URL = "https://integrate.api.nvidia.com/v1"
-    # General-purpose model, proven to work in this project
-    MODEL = "meta/llama-3.1-70b-instruct"
-
     def __init__(self):
-        """Initialize with NVIDIA API key."""
-        if not settings.NVIDIA_API_KEY:
-            raise ValueError("NVIDIA_API_KEY is required")
+        """Initialize with provider-based API client."""
+        provider = settings.LLM_PROVIDER
 
-        self.api_key = settings.NVIDIA_API_KEY
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        if provider == "gemini":
+            if not settings.GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY is required for Gemini provider")
+            self.client = AsyncOpenAI(
+                api_key=settings.GOOGLE_API_KEY,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            )
+            self.model = settings.LLM_MODEL or "gemini-2.0-flash"
+        else:  # openai
+            if not settings.OPENAI_API_KEY:
+                raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
+            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            self.model = settings.LLM_MODEL or "gpt-4o-mini"
 
     async def generate_problems(
         self,
@@ -171,27 +175,20 @@ class ProblemGenerator:
 
         for attempt in range(max_retries):
             try:
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    response = await client.post(
-                        f"{self.BASE_URL}/chat/completions",
-                        headers=self.headers,
-                        json={
-                            "model": self.MODEL,
-                            "messages": [
-                                {
-                                    "role": "system",
-                                    "content": "You are an expert coding problem generator. You MUST always include a complete working 'solution' field with actual runnable code and an 'explanation' field in your response. Output valid JSON only.",
-                                },
-                                {"role": "user", "content": prompt},
-                            ],
-                            "temperature": 0.3,
-                            "max_tokens": 6000,
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert coding problem generator. You MUST always include a complete working 'solution' field with actual runnable code and an 'explanation' field in your response. Output valid JSON only.",
                         },
-                    )
-                    response.raise_for_status()
-                    result = response.json()
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=6000,
+                )
 
-                content = result["choices"][0]["message"]["content"].strip()
+                content = response.choices[0].message.content.strip()
 
                 # Extract JSON from markdown code block if present
                 content = self._extract_json(content)
@@ -240,10 +237,6 @@ class ProblemGenerator:
                     continue  # Retry
                 raise ValueError(
                     f"Problem generation failed: JSON parsing error after {max_retries} attempts"
-                ) from e
-            except httpx.HTTPStatusError as e:
-                raise ValueError(
-                    f"Problem generation failed: API error {e.response.status_code}"
                 ) from e
             except Exception as e:
                 raise ValueError(f"Problem generation failed: {str(e)}") from e
@@ -515,27 +508,20 @@ class ProblemGenerator:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    f"{self.BASE_URL}/chat/completions",
-                    headers=self.headers,
-                    json={
-                        "model": self.MODEL,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "당신은 코딩 전문가입니다. 완전히 작동하는 솔루션을 제공하세요. JSON만 출력하세요.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "temperature": 0.2,
-                        "max_tokens": 2000,
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "당신은 코딩 전문가입니다. 완전히 작동하는 솔루션을 제공하세요. JSON만 출력하세요.",
                     },
-                )
-                response.raise_for_status()
-                result = response.json()
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=2000,
+            )
 
-            content = result["choices"][0]["message"]["content"].strip()
+            content = response.choices[0].message.content.strip()
             content = self._extract_json(content)
 
             return json.loads(content)
@@ -588,27 +574,20 @@ class ProblemGenerator:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    f"{self.BASE_URL}/chat/completions",
-                    headers=self.headers,
-                    json={
-                        "model": self.MODEL,
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "당신은 코드 평가 전문가입니다. 사용자의 풀이를 정확하게 평가하고 건설적인 피드백을 한국어로 제공합니다. JSON만 출력하세요.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "temperature": 0.1,
-                        "max_tokens": 2000,
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "당신은 코드 평가 전문가입니다. 사용자의 풀이를 정확하게 평가하고 건설적인 피드백을 한국어로 제공합니다. JSON만 출력하세요.",
                     },
-                )
-                response.raise_for_status()
-                result = response.json()
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=2000,
+            )
 
-            content = result["choices"][0]["message"]["content"].strip()
+            content = response.choices[0].message.content.strip()
             content = self._extract_json(content)
 
             return json.loads(content)
