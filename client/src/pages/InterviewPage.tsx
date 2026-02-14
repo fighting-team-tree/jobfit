@@ -1,14 +1,15 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings } from 'lucide-react';
 import { useConversation } from '@elevenlabs/react';
 import { useProfileStore, useInterviewStore } from '../lib/store';
 
+const API_BASE = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
+
 export default function InterviewPage() {
-    const navigate = useNavigate();
-    const { resumeAnalysis, jdText } = useProfileStore();
+    const { profile: resumeAnalysis } = useProfileStore();
     const {
-        sessionId, isActive, currentQuestion, questionNumber, totalQuestions,
         startSession, endSession, addMessage, conversation: chatHistory
     } = useInterviewStore();
 
@@ -24,10 +25,10 @@ export default function InterviewPage() {
             endSession(); // End internal session state
         },
         onMessage: (message) => {
-            // Visualize chat
-            if (message.source === 'user' || message.source === 'agent') {
+            // Visualize chat - ElevenLabs SDK uses 'ai' for agent messages
+            if (message.source === 'user' || message.source === 'ai') {
                 addMessage(
-                    message.source === 'agent' ? 'interviewer' : 'candidate',
+                    message.source === 'ai' ? 'interviewer' : 'user',
                     message.message
                 );
             }
@@ -44,14 +45,13 @@ export default function InterviewPage() {
             setStatus('인증 토큰 요청 중...');
 
             // 1. Get Authentication (Agent ID & Signed URL) from Backend
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/interview/agent-auth`, {
+            const response = await fetch(`${API_BASE}/interview/agent-auth`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
             const data = await response.json();
 
             let agentId = data.agent_id;
-            let signedUrl = data.signed_url;
 
             // Fallback: If backend doesn't have ID, use Input
             if (!agentId && agentIdInput) {
