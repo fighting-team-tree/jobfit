@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     # AI Keys
     NVIDIA_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_AGENT_ID: str = ""
+    DEEPGRAM_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
 

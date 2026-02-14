@@ -28,6 +28,8 @@ dependencies = [
     # Database (Replit PostgreSQL)
     "sqlalchemy>=2.0.0",
     "asyncpg>=0.29.0",
+    # STT (Deepgram)
+    "deepgram-sdk>=3.0.0",
 ]
 
 [build-system]
