@@ -195,31 +195,6 @@ def get_fixtures():
     }
 
 
-@router.get("/fixtures/{name}", response_model=ResumeFileResponse)
-def get_fixture_by_name(name: str):
-    """
-    TEST_MODE 전용: 이름으로 fixture 프로필을 ResumeFileResponse 형태로 반환.
-    업로드 없이 바로 프로필 데이터를 사용할 수 있음.
-    """
-    if not settings.TEST_MODE:
-        raise HTTPException(status_code=404, detail="TEST_MODE가 아닙니다")
-
-    from app.services.fixture_service import get_fixture_profile
-
-    fixture = get_fixture_profile(name)
-    if not fixture:
-        raise HTTPException(status_code=404, detail=f"Fixture '{name}'를 찾을 수 없습니다")
-
-    return ResumeFileResponse(
-        markdown=f"[TEST_MODE] Fixture profile: {fixture.get('name', 'unknown')}",
-        structured=ProfileStructured(**fixture),
-        pages=1,
-        success=True,
-        error=None,
-        structured_parse_error=False,
-    )
-
-
 @router.get("/fixtures/jd")
 def get_fixture_jds():
     """
@@ -241,11 +216,12 @@ def get_fixture_jds():
     }
 
 
-@router.get("/fixtures/jd/{title}")
-def get_fixture_jd_by_title(title: str):
+@router.get("/fixtures/jd/detail")
+def get_fixture_jd_by_title(title: str = Query(..., description="JD 제목 (부분 매칭)")):
     """
     TEST_MODE 전용: 제목으로 fixture JD를 반환.
     갭 분석 테스트에 사용할 raw_text를 포함.
+    Query parameter 사용 (title에 '/'가 포함될 수 있으므로).
     """
     if not settings.TEST_MODE:
         raise HTTPException(status_code=404, detail="TEST_MODE가 아닙니다")
@@ -262,6 +238,32 @@ def get_fixture_jd_by_title(title: str):
         "raw_text": jd.get("raw_text", ""),
         "success": True,
     }
+
+
+@router.get("/fixtures/{name}", response_model=ResumeFileResponse)
+def get_fixture_by_name(name: str):
+    """
+    TEST_MODE 전용: 이름으로 fixture 프로필을 ResumeFileResponse 형태로 반환.
+    업로드 없이 바로 프로필 데이터를 사용할 수 있음.
+    주의: /fixtures/jd 라우트보다 뒤에 위치해야 {name}이 "jd"를 가로채지 않음.
+    """
+    if not settings.TEST_MODE:
+        raise HTTPException(status_code=404, detail="TEST_MODE가 아닙니다")
+
+    from app.services.fixture_service import get_fixture_profile
+
+    fixture = get_fixture_profile(name)
+    if not fixture:
+        raise HTTPException(status_code=404, detail=f"Fixture '{name}'를 찾을 수 없습니다")
+
+    return ResumeFileResponse(
+        markdown=f"[TEST_MODE] Fixture profile: {fixture.get('name', 'unknown')}",
+        structured=ProfileStructured(**fixture),
+        pages=1,
+        success=True,
+        error=None,
+        structured_parse_error=False,
+    )
 
 
 @router.post("/resume", response_model=ResumeAnalysisResponse)
@@ -473,6 +475,14 @@ async def analyze_gap(request: GapAnalysisRequest):
             if hasattr(request.profile, "model_dump")
             else request.profile.dict()
         )
+
+        # TEST_MODE: LLM/임베딩 없이 키워드 매칭으로 즉시 결과 반환
+        if settings.TEST_MODE:
+            from app.services.fixture_service import analyze_gap_fixture
+
+            result = analyze_gap_fixture(profile_payload, request.jd_text)
+            return GapAnalysisResponse(**result)
+
         result = await llm_service.analyze_gap(profile_payload, request.jd_text)
         if result.get("error"):
             raise HTTPException(status_code=500, detail=result.get("error"))

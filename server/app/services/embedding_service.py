@@ -21,7 +21,7 @@ class EmbeddingService:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.model = settings.EMBEDDING_MODEL or "text-embedding-004"
+            self.model = settings.EMBEDDING_MODEL or "gemini-embedding-001"
         else:  # openai
             self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
             self.model = settings.EMBEDDING_MODEL or "text-embedding-3-small"
@@ -77,8 +77,8 @@ class EmbeddingService:
             input=texts,
         )
 
-        # Sort by index to maintain order
-        data = sorted(response.data, key=lambda x: x.index)
+        # Sort by index to maintain order (Gemini may return index=None)
+        data = sorted(response.data, key=lambda x: x.index if x.index is not None else 0)
         return [np.array(d.embedding) for d in data]
 
     def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:

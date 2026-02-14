@@ -30,9 +30,18 @@ export default function DashboardPage() {
     const [isLoadingFixtureJD, setIsLoadingFixtureJD] = useState(false);
 
     useEffect(() => {
-        analysisAPI.getFixtureJDs().then((res) => {
+        analysisAPI.getFixtureJDs().then(async (res) => {
             setTestMode(res.test_mode);
             setFixtureJDs(res.jds);
+            // TEST_MODE + JD 비어있으면 첫 번째 fixture 자동 로드
+            if (res.test_mode && res.jds.length > 0 && !jdText.trim()) {
+                try {
+                    const result = await analysisAPI.loadFixtureJD(res.jds[0].title);
+                    if (result.success && result.raw_text) {
+                        setJdText(result.raw_text);
+                    }
+                } catch {}
+            }
         }).catch(() => {});
     }, []);
 

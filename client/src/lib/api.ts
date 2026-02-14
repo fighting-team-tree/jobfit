@@ -199,7 +199,7 @@ export const analysisAPI = {
    * [TEST_MODE] Load a fixture JD by title
    */
   async loadFixtureJD(title: string): Promise<FixtureJDDetailResponse> {
-    const response = await fetch(`${API_BASE_URL}/analyze/fixtures/jd/${encodeURIComponent(title)}`, fetchOptions);
+    const response = await fetch(`${API_BASE_URL}/analyze/fixtures/jd/detail?title=${encodeURIComponent(title)}`, fetchOptions);
     return handleResponse<FixtureJDDetailResponse>(response);
   },
 
