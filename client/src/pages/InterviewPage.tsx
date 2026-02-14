@@ -1,14 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings } from 'lucide-react';
 import { useConversation } from '@elevenlabs/react';
+import { analysisAPI } from '../lib/api';
 import { useProfileStore, useInterviewStore } from '../lib/store';
 
 const API_BASE = import.meta.env.VITE_API_URL ||
     (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 export default function InterviewPage() {
-    const { profile: resumeAnalysis } = useProfileStore();
+    const { profile: resumeAnalysis, setProfile } = useProfileStore();
     const {
         startSession, endSession, addMessage, conversation: chatHistory
     } = useInterviewStore();
@@ -16,6 +17,28 @@ export default function InterviewPage() {
     const [status, setStatus] = useState<string>('준비');
     const [agentIdInput, setAgentIdInput] = useState('');
     const [showSettings, setShowSettings] = useState(false);
+    const [isAutoLoading, setIsAutoLoading] = useState(false);
+
+    // TEST_MODE: 프로필 없으면 fixture 자동 로드
+    useEffect(() => {
+        if (!resumeAnalysis) {
+            analysisAPI.getFixtures().then(async (res) => {
+                if (res.test_mode && res.profiles.length > 0) {
+                    setIsAutoLoading(true);
+                    try {
+                        const result = await analysisAPI.loadFixture(res.profiles[0].name);
+                        if (result.structured) {
+                            setProfile(result.structured);
+                        }
+                    } catch {
+                        // fixture 로드 실패 시 기존 동작 유지
+                    } finally {
+                        setIsAutoLoading(false);
+                    }
+                }
+            }).catch(() => {});
+        }
+    }, [resumeAnalysis, setProfile]);
 
     // ElevenLabs Conversation Hook
     const conversation = useConversation({
@@ -111,6 +134,17 @@ export default function InterviewPage() {
 
     // Check prerequisites
     if (!resumeAnalysis) {
+        if (isAutoLoading) {
+            return (
+                <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
+                    <div className="text-center">
+                        <Loader2 className="w-12 h-12 text-amber-400 mx-auto mb-4 animate-spin" />
+                        <h1 className="text-xl font-bold mb-2">테스트 프로필 로딩 중...</h1>
+                        <p className="text-neutral-400 text-sm">TEST MODE: fixture 프로필을 자동으로 불러오고 있습니다.</p>
+                    </div>
+                </div>
+            );
+        }
         return (
             <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
                 <div className="text-center">

@@ -143,7 +143,66 @@ const fetchOptions = {
   credentials: 'include' as RequestCredentials,
 };
 
+export interface FixtureProfile {
+  name: string;
+  skills_count: number;
+}
+
+export interface FixturesResponse {
+  profiles: FixtureProfile[];
+  test_mode: boolean;
+}
+
+export interface FixtureJD {
+  title: string;
+  company: string;
+}
+
+export interface FixtureJDsResponse {
+  jds: FixtureJD[];
+  test_mode: boolean;
+}
+
+export interface FixtureJDDetailResponse {
+  title: string;
+  company: string;
+  raw_text: string;
+  success: boolean;
+}
+
 export const analysisAPI = {
+  /**
+   * [TEST_MODE] Get available fixture profiles
+   */
+  async getFixtures(): Promise<FixturesResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/fixtures`, fetchOptions);
+    return handleResponse<FixturesResponse>(response);
+  },
+
+  /**
+   * [TEST_MODE] Load a fixture profile by name (no file upload needed)
+   */
+  async loadFixture(name: string): Promise<ResumeFileResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/fixtures/${encodeURIComponent(name)}`, fetchOptions);
+    return handleResponse<ResumeFileResponse>(response);
+  },
+
+  /**
+   * [TEST_MODE] Get available fixture JDs
+   */
+  async getFixtureJDs(): Promise<FixtureJDsResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/fixtures/jd`, fetchOptions);
+    return handleResponse<FixtureJDsResponse>(response);
+  },
+
+  /**
+   * [TEST_MODE] Load a fixture JD by title
+   */
+  async loadFixtureJD(title: string): Promise<FixtureJDDetailResponse> {
+    const response = await fetch(`${API_BASE_URL}/analyze/fixtures/jd/${encodeURIComponent(title)}`, fetchOptions);
+    return handleResponse<FixtureJDDetailResponse>(response);
+  },
+
   /**
    * Analyze resume text
    */

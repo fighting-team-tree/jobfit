@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.services.jd_scraper_service import jd_scraper_service
 from app.services.llm_service import llm_service
 from app.services.resume_parser_service import resume_parser_service
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -171,7 +171,97 @@ class GitHubAnalysisResponse(BaseModel):
 @router.get("/")
 def read_root():
     """Health check for analysis module."""
-    return {"module": "analysis", "status": "healthy"}
+    return {"module": "analysis", "status": "healthy", "test_mode": settings.TEST_MODE}
+
+
+@router.get("/fixtures")
+def get_fixtures():
+    """
+    TEST_MODE 전용: 사용 가능한 fixture 프로필 목록 반환.
+    TEST_MODE가 아니면 빈 리스트 반환.
+    """
+    if not settings.TEST_MODE:
+        return {"profiles": [], "test_mode": False}
+
+    from app.services.fixture_service import get_fixture_profiles
+
+    profiles = get_fixture_profiles()
+    return {
+        "profiles": [
+            {"name": p.get("name", ""), "skills_count": len(p.get("skills", []))}
+            for p in profiles
+        ],
+        "test_mode": True,
+    }
+
+
+@router.get("/fixtures/{name}", response_model=ResumeFileResponse)
+def get_fixture_by_name(name: str):
+    """
+    TEST_MODE 전용: 이름으로 fixture 프로필을 ResumeFileResponse 형태로 반환.
+    업로드 없이 바로 프로필 데이터를 사용할 수 있음.
+    """
+    if not settings.TEST_MODE:
+        raise HTTPException(status_code=404, detail="TEST_MODE가 아닙니다")
+
+    from app.services.fixture_service import get_fixture_profile
+
+    fixture = get_fixture_profile(name)
+    if not fixture:
+        raise HTTPException(status_code=404, detail=f"Fixture '{name}'를 찾을 수 없습니다")
+
+    return ResumeFileResponse(
+        markdown=f"[TEST_MODE] Fixture profile: {fixture.get('name', 'unknown')}",
+        structured=ProfileStructured(**fixture),
+        pages=1,
+        success=True,
+        error=None,
+        structured_parse_error=False,
+    )
+
+
+@router.get("/fixtures/jd")
+def get_fixture_jds():
+    """
+    TEST_MODE 전용: 사용 가능한 fixture JD 목록 반환.
+    TEST_MODE가 아니면 빈 리스트 반환.
+    """
+    if not settings.TEST_MODE:
+        return {"jds": [], "test_mode": False}
+
+    from app.services.fixture_service import get_fixture_jds as _get_fixture_jds
+
+    jds = _get_fixture_jds()
+    return {
+        "jds": [
+            {"title": jd.get("title", ""), "company": jd.get("company", "")}
+            for jd in jds
+        ],
+        "test_mode": True,
+    }
+
+
+@router.get("/fixtures/jd/{title}")
+def get_fixture_jd_by_title(title: str):
+    """
+    TEST_MODE 전용: 제목으로 fixture JD를 반환.
+    갭 분석 테스트에 사용할 raw_text를 포함.
+    """
+    if not settings.TEST_MODE:
+        raise HTTPException(status_code=404, detail="TEST_MODE가 아닙니다")
+
+    from app.services.fixture_service import get_fixture_jd
+
+    jd = get_fixture_jd(title)
+    if not jd:
+        raise HTTPException(status_code=404, detail=f"Fixture JD '{title}'를 찾을 수 없습니다")
+
+    return {
+        "title": jd.get("title", ""),
+        "company": jd.get("company", ""),
+        "raw_text": jd.get("raw_text", ""),
+        "success": True,
+    }
 
 
 @router.post("/resume", response_model=ResumeAnalysisResponse)

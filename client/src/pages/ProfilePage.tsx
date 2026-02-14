@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw } from 'lucide-react';
+import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw, Users } from 'lucide-react';
 import { analysisAPI } from '../lib/api';
+import type { FixtureProfile } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 export default function ProfilePage() {
@@ -23,6 +24,34 @@ export default function ProfilePage() {
     const [githubError, setGithubError] = useState<string | null>(null);
     const [uploadMode, setUploadMode] = useState<'file' | 'text'>('file');
     const resetLockRef = useRef(false);
+
+    // TEST_MODE: fixture profiles
+    const [testMode, setTestMode] = useState(false);
+    const [fixtures, setFixtures] = useState<FixtureProfile[]>([]);
+    const [isLoadingFixture, setIsLoadingFixture] = useState(false);
+
+    useEffect(() => {
+        analysisAPI.getFixtures().then((res) => {
+            setTestMode(res.test_mode);
+            setFixtures(res.profiles);
+        }).catch(() => {});
+    }, []);
+
+    const handleLoadFixture = async (name: string) => {
+        setIsLoadingFixture(true);
+        setResumeError(null);
+        try {
+            const result = await analysisAPI.loadFixture(name);
+            setResumeFileResult(result);
+            if (result.structured) {
+                setProfile(result.structured);
+            }
+        } catch (err) {
+            setResumeError(err instanceof Error ? err.message : 'Fixture 로드 실패');
+        } finally {
+            setIsLoadingFixture(false);
+        }
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -196,6 +225,34 @@ export default function ProfilePage() {
                             초기화
                         </button>
                     </div>
+
+                    {/* TEST_MODE: Fixture Profile Selector */}
+                    {testMode && fixtures.length > 0 && (
+                        <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Users className="w-5 h-5 text-amber-400" />
+                                <span className="text-sm font-semibold text-amber-400">TEST MODE</span>
+                                <span className="text-xs text-neutral-400">
+                                    — 업로드 없이 샘플 이력서로 바로 테스트
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {fixtures.map((f) => (
+                                    <button
+                                        key={f.name}
+                                        onClick={() => handleLoadFixture(f.name)}
+                                        disabled={isLoadingFixture}
+                                        className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 rounded-lg text-sm font-medium text-amber-200 transition-colors disabled:opacity-50"
+                                    >
+                                        {isLoadingFixture ? (
+                                            <Loader2 className="w-4 h-4 animate-spin inline mr-1" />
+                                        ) : null}
+                                        {f.name} ({f.skills_count} skills)
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Mode Toggle */}
                     <div className="flex gap-2 mb-6">

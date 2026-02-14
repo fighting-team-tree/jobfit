@@ -1,0 +1,5 @@
+{
+  "title": "Backend/Infra Engineer",
+  "company": "토스",
+  "raw_text": "[토스] Backend/Infra Engineer 채용\n\n회사 소개:\n대한민국 대표 핀테크 기업으로, 금융의 모든 것을 혁신하고 있습니다.\n\n담당 업무:\n- 대규모 트래픽 처리를 위한 백엔드 시스템 설계 및 개발\n- MSA(Microservice Architecture) 기반 서비스 개발\n- CI/CD 파이프라인 구축 및 운영\n- 데이터베이스 설계 및 성능 최적화\n- 시스템 모니터링 및 장애 대응\n\n자격요건:\n- Java 또는 Kotlin 3년 이상 경험\n- Spring Boot 기반 백엔드 개발 경험\n- PostgreSQL, MySQL 등 RDBMS 실무 경험\n- Redis, Kafka 등 미들웨어 사용 경험\n- REST API 설계 및 개발 경험\n- Git 기반 협업 경험\n\n우대사항:\n- Kubernetes, Docker 운영 경험\n- AWS 또는 GCP 클라우드 인프라 경험\n- Terraform 등 IaC 도구 사용 경험\n- 대용량 트래픽(일 1억 요청 이상) 처리 경험\n- Python, Go 등 추가 언어 경험\n- 오픈소스 기여 경험\n\n근무 조건:\n- 정규직\n- 연봉: 8,000만~1.2억 (경력에 따라 협의)\n- 위치: 서울 강남구\n- 자유로운 근무 환경"
+}

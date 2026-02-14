@@ -1,7 +1,7 @@
-import { useRef, useState, useMemo, lazy, Suspense } from 'react';
+import { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
-import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
+import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw, FileText } from 'lucide-react';
+import { analysisAPI, roadmapAPI, type Roadmap, type FixtureJD } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 const SkillRadarChart = lazy(() => import('../components/charts/SkillRadarChart'));
@@ -23,6 +23,18 @@ export default function DashboardPage() {
     const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
     const [jdUrl, setJdUrl] = useState('');
     const resetLockRef = useRef(false);
+
+    // TEST_MODE: fixture JDs
+    const [testMode, setTestMode] = useState(false);
+    const [fixtureJDs, setFixtureJDs] = useState<FixtureJD[]>([]);
+    const [isLoadingFixtureJD, setIsLoadingFixtureJD] = useState(false);
+
+    useEffect(() => {
+        analysisAPI.getFixtureJDs().then((res) => {
+            setTestMode(res.test_mode);
+            setFixtureJDs(res.jds);
+        }).catch(() => {});
+    }, []);
 
     const profileData = profile;
     const hasProfile = !!(profileData && (profileData.skills?.length || profileData.experience?.length));
@@ -94,6 +106,21 @@ export default function DashboardPage() {
     };
 
 
+    const handleLoadFixtureJD = async (title: string) => {
+        setIsLoadingFixtureJD(true);
+        setError(null);
+        try {
+            const result = await analysisAPI.loadFixtureJD(title);
+            if (result.success && result.raw_text) {
+                setJdText(result.raw_text);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Fixture JD 로드 실패');
+        } finally {
+            setIsLoadingFixtureJD(false);
+        }
+    };
+
     if (!hasProfile) {
         return (
             <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
@@ -155,6 +182,34 @@ export default function DashboardPage() {
                             초기화
                         </button>
                     </div>
+
+                    {/* TEST_MODE: Fixture JD Selector */}
+                    {testMode && fixtureJDs.length > 0 && (
+                        <div className="mb-6 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5">
+                            <div className="flex items-center gap-2 mb-3">
+                                <FileText className="w-5 h-5 text-amber-400" />
+                                <span className="text-sm font-semibold text-amber-400">TEST MODE</span>
+                                <span className="text-xs text-neutral-400">
+                                    — 샘플 채용공고로 갭 분석을 바로 테스트
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {fixtureJDs.map((jd) => (
+                                    <button
+                                        key={jd.title}
+                                        onClick={() => handleLoadFixtureJD(jd.title)}
+                                        disabled={isLoadingFixtureJD}
+                                        className="px-4 py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 rounded-lg text-sm font-medium text-amber-200 transition-colors disabled:opacity-50"
+                                    >
+                                        {isLoadingFixtureJD ? (
+                                            <Loader2 className="w-4 h-4 animate-spin inline mr-1" />
+                                        ) : null}
+                                        {jd.title} ({jd.company})
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid lg:grid-cols-3 gap-6">
                         {/* JD Input */}
