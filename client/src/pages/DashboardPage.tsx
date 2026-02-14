@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Target, Loader2, AlertCircle, CheckCircle2, BookOpen, Mic, RotateCcw } from 'lucide-react';
 import { analysisAPI, roadmapAPI, type Roadmap } from '../lib/api';
 import { useProfileStore } from '../lib/store';
-import SkillRadarChart from '../components/charts/SkillRadarChart';
+
+const SkillRadarChart = lazy(() => import('../components/charts/SkillRadarChart'));
 
 export default function DashboardPage() {
     const navigate = useNavigate();
@@ -25,6 +26,24 @@ export default function DashboardPage() {
 
     const profileData = profile;
     const hasProfile = !!(profileData && (profileData.skills?.length || profileData.experience?.length));
+
+    const chartData = useMemo(() => {
+        if (!gapAnalysis) return [];
+        const required = gapAnalysis.jd_analysis?.required_skills || [];
+        const preferred = gapAnalysis.jd_analysis?.preferred_skills || [];
+        const allJDSkills = Array.from(new Set([...required, ...preferred]));
+        const matchedSet = new Set(gapAnalysis.matching_skills.map(s => s.toLowerCase()));
+        return allJDSkills.slice(0, 10).map(skill => {
+            const isMatched = matchedSet.has(skill.toLowerCase());
+            const isRequired = required.includes(skill);
+            return {
+                subject: skill,
+                A: isMatched ? 100 : 20,
+                B: isRequired ? 100 : 70,
+                fullMark: 100
+            };
+        });
+    }, [gapAnalysis]);
 
     const handleScrapeJD = async () => {
         if (!jdUrl.trim()) return;
@@ -63,9 +82,10 @@ export default function DashboardPage() {
             const result = await analysisAPI.analyzeGap(profileData, jdText);
             setGapAnalysis(result);
 
-            // Also generate roadmap
-            const roadmapResult = await roadmapAPI.generate(result);
-            setRoadmap(roadmapResult);
+            // Generate roadmap in background (non-blocking)
+            roadmapAPI.generate(result)
+                .then(roadmapResult => setRoadmap(roadmapResult))
+                .catch(() => {});
         } catch (err) {
             setError(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다.');
         } finally {
@@ -276,30 +296,9 @@ export default function DashboardPage() {
                                 <div className="lg:col-span-2 p-6 rounded-2xl border border-white/10 bg-white/5">
                                     <h2 className="text-lg font-semibold mb-4">역량 분석 차트</h2>
                                     <div className="w-full h-full min-h-[300px]">
-                                        <SkillRadarChart
-                                            data={(() => {
-                                                // 1. Collect all relevant skills from JD
-                                                const required = gapAnalysis.jd_analysis?.required_skills || [];
-                                                const preferred = gapAnalysis.jd_analysis?.preferred_skills || [];
-                                                const allJDSkills = Array.from(new Set([...required, ...preferred]));
-
-                                                // 2. Separate matched vs missing
-                                                const matchedSet = new Set(gapAnalysis.matching_skills.map(s => s.toLowerCase()));
-
-                                                // 3. Build chart data
-                                                return allJDSkills.slice(0, 10).map(skill => { // Limit to top 10 to avoid overcrowding
-                                                    const isMatched = matchedSet.has(skill.toLowerCase());
-                                                    const isRequired = required.includes(skill);
-                                                    
-                                                    return {
-                                                        subject: skill,
-                                                        A: isMatched ? 100 : 20, // My Score (20 for visibility even if 0)
-                                                        B: isRequired ? 100 : 70, // JD Score (100 for Required, 70 for Preferred)
-                                                        fullMark: 100
-                                                    };
-                                                });
-                                            })()}
-                                        />
+                                        <Suspense fallback={<div className="w-full h-[300px] flex items-center justify-center text-neutral-500">차트 로딩 중...</div>}>
+                                            <SkillRadarChart data={chartData} />
+                                        </Suspense>
                                     </div>
                                 </div>
                             </div>

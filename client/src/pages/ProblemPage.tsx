@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Play, Loader2, CheckCircle, XCircle, RotateCcw, AlertCircle, MessageSquare, Code } from 'lucide-react';
-import { CodeEditor } from '../components/problem/CodeEditor';
 import { ProblemCard, type Problem } from '../components/problem/ProblemCard';
+
+const CodeEditor = lazy(() => import('../components/problem/CodeEditor'));
 import { problemAPI } from '../lib/api';
 import { useProblemStore } from '../lib/store';
 
@@ -220,12 +221,14 @@ export default function ProblemPage() {
                 spellCheck={false}
               />
             ) : (
-              /* 코드 에디터 */
-              <CodeEditor
-                language={problem.language || 'python'}
-                value={code}
-                onChange={setCode}
-              />
+              /* 코드 에디터 - Monaco lazy loaded */
+              <Suspense fallback={<div className="w-full h-full bg-neutral-900 flex items-center justify-center text-neutral-500">에디터 로딩 중...</div>}>
+                <CodeEditor
+                  language={problem.language || 'python'}
+                  value={code}
+                  onChange={setCode}
+                />
+              </Suspense>
             )}
           </div>
 

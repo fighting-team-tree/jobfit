@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle, Code2, FileQuestion } from 'lucide-react';
 import { roadmapAPI, problemAPI, type Roadmap } from '../lib/api';
@@ -16,6 +16,12 @@ export default function RoadmapPage() {
     const [generatingWeek, setGeneratingWeek] = useState<number | null>(null);
     const [weekErrors, setWeekErrors] = useState<Record<number, string>>({});
     const [showSolution, setShowSolution] = useState<Record<string, boolean>>({});
+
+    const completionRate = useMemo(() => {
+        if (!roadmap || roadmap.weekly_plans.length === 0) return 0;
+        const totalTodos = roadmap.weekly_plans.reduce((acc, w) => acc + w.todos.length, 0);
+        return totalTodos > 0 ? Math.round((completedTodos.size / totalTodos) * 100) : 0;
+    }, [roadmap, completedTodos]);
 
     const generateRoadmap = useCallback(async () => {
         if (!gapAnalysis) return;
@@ -158,9 +164,7 @@ export default function RoadmapPage() {
                                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                                     <p className="text-sm text-neutral-400">완료율</p>
                                     <p className="text-2xl font-bold">
-                                        {roadmap.weekly_plans.length > 0
-                                            ? Math.round((completedTodos.size / roadmap.weekly_plans.reduce((acc, w) => acc + w.todos.length, 0)) * 100)
-                                            : 0}%
+                                        {completionRate}%
                                     </p>
                                 </div>
                             </div>
@@ -253,7 +257,7 @@ export default function RoadmapPage() {
                                                 <button
                                                     onClick={() => generateProblemsForWeek(
                                                         week.week_number,
-                                                        week.todos.map(t => t.skill).filter((v, i, a) => a.indexOf(v) === i)
+                                                        [...new Set(week.todos.map(t => t.skill))]
                                                     )}
                                                     disabled={generatingWeek === week.week_number}
                                                     className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:cursor-not-allowed rounded-lg transition-colors"
