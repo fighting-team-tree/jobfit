@@ -100,6 +100,15 @@ dist-ssr/
 # Replit
 # We keep replit.nix and .replit
 
+# bkit Plugin Data
+.bkit/
+docs/.bkit-memory.json
+docs/.pdca-snapshots/
+docs/.pdca-status.json
+
+# Claude Code Local Settings
+.claude/settings.local.json
+
 # Project Specific
 data/
 parsing_result.md
