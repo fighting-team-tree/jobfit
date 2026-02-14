@@ -182,6 +182,7 @@ curl -X POST http://localhost:8000/api/v1/analyze/jd/url \
 ### 개발 도구
 | 명령어 | 설명 |
 |--------|------|
+| `/commit` | LLM-Optimized 커밋 생성 (보안/원자성 검사 + WHY/WHAT/IMPACT) |
 | `/lint` | 코드 린트 검사 (ESLint, Ruff) |
 
 ---
@@ -194,7 +195,7 @@ curl -X POST http://localhost:8000/api/v1/analyze/jd/url \
 |------|------|
 | `01-korean.md` | 한국어 우선 커뮤니케이션 |
 | `02-python-uv.md` | Python uv 패키지 관리 필수 |
-| `03-git-convention.md` | Git 커밋 컨벤션 (feat, fix, docs...) |
+| `03-git-convention.md` | LLM-Optimized WHY/WHAT/IMPACT 커밋 컨벤션 |
 | `04-security.md` | PII 마스킹, API 키 보안 |
 | `05-project-structure.md` | 디렉토리 구조 및 핵심 파일 |
 | `06-api-patterns.md` | API 엔드포인트 패턴 |

@@ -1,23 +1,40 @@
-# Git Commit Convention
+# LLM-Optimized Git Commit Convention
 
-## 1. Commit Message Structure
+## Commit Message Format
 ```
-type: Subject
+type(scope): subject (imperative, max 72 chars)
 
-[Optional Body - Why and What]
+WHY: One-line reason for the change
+WHAT:
+- Specific change 1
+- Specific change 2
+
+IMPACT: Breaking changes / side effects (only when applicable)
+Refs: #issue-number
 ```
 
-## 2. Types
-- **feat**: New feature (새로운 기능)
-- **fix**: Bug fix (버그 수정)
-- **docs**: Documentation only (문서 수정)
-- **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
-- **refactor**: A code change that neither fixes a bug nor adds a feature (리팩토링)
-- **perf**: A code change that improves performance (성능 개선)
-- **test**: Adding missing tests or correcting existing tests (테스트)
-- **chore**: Changes to the build process or auxiliary tools and libraries such as documentation generation (빌드, 패키지 매니저 설정 등)
+## Types
+- **feat**: New feature | **fix**: Bug fix | **docs**: Documentation
+- **refactor**: Refactoring | **perf**: Performance | **style**: Formatting
+- **test**: Tests | **chore**: Build/config | **ci**: CI/CD
 
-## 3. Rules
-- **Subject**: Use imperative mood (e.g., "Add feature" not "Added feature"). No period at the end.
-- **Body**: Detailed explanation of the change if necessary.
-- **Granularity**: Commit atomically. One feature/fix per commit is preferred.
+## Scopes
+| Scope | Target | Scope | Target |
+|-------|--------|-------|--------|
+| `dashboard` | DashboardPage + charts | `analysis` | Gap analysis pipeline |
+| `profile` | ProfilePage + profile API | `resume` | Resume parser |
+| `interview` | InterviewPage + interview API | `jd` | JD scraper |
+| `roadmap` | RoadmapPage + roadmap API | `agent` | LangGraph agents |
+| `problem` | ProblemPage + problem API | `auth` | Authentication |
+| `companies` | CompaniesPage + company API | `api` | API endpoints (general) |
+| `deploy` | Deployment config | `config` | Project config |
+
+## Core Rules
+1. **WHY is required**: Always include WHY when writing body ("What breaks without this commit?")
+2. **WHAT is behavior-focused**: Describe behavior/feature changes, NOT file names
+3. **IMPACT is optional**: Only when changes affect other modules
+4. **Atomic commits**: One feature/fix per commit
+
+## Branch Strategy
+- `main`: Production | `dev`: Integration
+- `feature/*`: Feature dev | `fix/*`: Bug fix | `hotfix/*`: Emergency fix
