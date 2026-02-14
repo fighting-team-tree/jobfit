@@ -1,171 +1,122 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic, MicOff, Phone, PhoneOff, Volume2, Loader2, AlertCircle } from 'lucide-react';
-import { interviewAPI } from '../lib/api';
+import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings } from 'lucide-react';
+import { useConversation } from '@elevenlabs/react';
 import { useProfileStore, useInterviewStore } from '../lib/store';
-
-type SpeechRecognitionResultEvent = {
-    resultIndex: number;
-    results: SpeechRecognitionResultList;
-};
-
-type SpeechRecognitionErrorEvent = {
-    error: string;
-};
-
-type SpeechRecognitionLike = {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
-    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-    start: () => void;
-    stop: () => void;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 export default function InterviewPage() {
     const navigate = useNavigate();
-    const { profile, jdText } = useProfileStore();
+    const { resumeAnalysis, jdText } = useProfileStore();
     const {
         sessionId, isActive, currentQuestion, questionNumber, totalQuestions,
-        conversation, startSession, setQuestion, addMessage, endSession
+        startSession, endSession, addMessage, conversation: chatHistory
     } = useInterviewStore();
 
-    const profileData = profile;
+    const [status, setStatus] = useState<string>('준비');
+    const [agentIdInput, setAgentIdInput] = useState('');
+    const [showSettings, setShowSettings] = useState(false);
 
-    const [isStarting, setIsStarting] = useState(false);
-    const [isListening, setIsListening] = useState(false);
-    const [transcript, setTranscript] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [audioPlaying] = useState(false);
-
-    const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-
-    // Initialize speech recognition
-    useEffect(() => {
-        const SpeechRecognitionClass =
-            (window as Window & { webkitSpeechRecognition?: SpeechRecognitionConstructor; SpeechRecognition?: SpeechRecognitionConstructor })
-                .webkitSpeechRecognition ??
-            (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition;
-
-        if (SpeechRecognitionClass) {
-            recognitionRef.current = new SpeechRecognitionClass();
-            recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = true;
-            recognitionRef.current.lang = 'ko-KR';
-
-            recognitionRef.current.onresult = (event: SpeechRecognitionResultEvent) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
-                    }
-                }
-                if (finalTranscript) {
-                    setTranscript((prev) => prev + finalTranscript);
-                }
-            };
-
-            recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
-                console.error('Speech recognition error:', event.error);
-                setIsListening(false);
-            };
-        }
-
-        return () => {
-            if (recognitionRef.current) {
-                recognitionRef.current.stop();
+    // ElevenLabs Conversation Hook
+    const conversation = useConversation({
+        onConnect: () => setStatus('연결됨'),
+        onDisconnect: () => {
+            setStatus('연결 종료');
+            endSession(); // End internal session state
+        },
+        onMessage: (message) => {
+            // Visualize chat
+            if (message.source === 'user' || message.source === 'agent') {
+                addMessage(
+                    message.source === 'agent' ? 'interviewer' : 'candidate',
+                    message.message
+                );
             }
-        };
-    }, []);
+        },
+        onError: (error) => {
+            console.error(error);
+            setStatus(`에러: ${error}`);
+        },
+    });
 
+    // Start Interview Handler
     const handleStartInterview = async () => {
-        if (!profileData || !jdText) {
-            setError('프로필과 채용공고 분석을 먼저 완료해주세요.');
-            return;
-        }
-
-        setIsStarting(true);
-        setError(null);
-
         try {
-            const session = await interviewAPI.startInterview(
-                profileData,
-                jdText,
-                'professional',
-                5
-            );
+            setStatus('인증 토큰 요청 중...');
 
-            startSession(session.session_id, session.total_questions);
-            setQuestion(session.question, session.question_number);
-            addMessage('interviewer', session.question);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : '면접 시작에 실패했습니다.');
-        } finally {
-            setIsStarting(false);
-        }
-    };
+            // 1. Get Authentication (Agent ID & Signed URL) from Backend
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/interview/agent-auth`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
 
-    const toggleListening = () => {
-        if (!recognitionRef.current) {
-            setError('음성 인식이 지원되지 않는 브라우저입니다.');
-            return;
-        }
+            let agentId = data.agent_id;
+            let signedUrl = data.signed_url;
 
-        if (isListening) {
-            recognitionRef.current.stop();
-            setIsListening(false);
-        } else {
-            recognitionRef.current.start();
-            setIsListening(true);
-        }
-    };
-
-    const handleSubmitAnswer = async () => {
-        if (!sessionId || !transcript.trim()) return;
-
-        setIsSending(true);
-        addMessage('user', transcript);
-        const answer = transcript;
-        setTranscript('');
-
-        try {
-            const response = await interviewAPI.respond(sessionId, answer);
-
-            if (response.status === 'completed') {
-                endSession();
-                // Navigate to feedback page
-                navigate(`/interview/feedback/${sessionId}`);
-            } else if (response.question) {
-                const nextQuestionNumber = response.question_number ?? questionNumber + 1;
-                setQuestion(response.question, nextQuestionNumber);
-                addMessage('interviewer', response.question);
+            // Fallback: If backend doesn't have ID, use Input
+            if (!agentId && agentIdInput) {
+                // If using direct input, we might not have signed URL (insecure but works for local testing)
+                agentId = agentIdInput;
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : '답변 전송에 실패했습니다.');
-        } finally {
-            setIsSending(false);
+
+            if (!agentId) {
+                alert("Agent ID가 설정되지 않았습니다. 설정 버튼을 눌러 ID를 입력하거나 서버 .env를 확인하세요.");
+                setStatus('설정 필요');
+                return;
+            }
+
+            setStatus('연결 중...');
+
+            // 2. Connect to ElevenLabs
+            // To pass dynamic variables (Resume, JD), we need to use 'clientTools' or 'overrides'
+            // But basic agent just starts here.
+
+            // Dynamic Variables Injection (Best Practice)
+            // Need to configure variables in Agent settings first, e.g. {{resume}}, {{job_description}}
+            // Then pass them here. 
+            // NOTE: @elevenlabs/react v0.0.x might support dynamic variables via 'dynamicVariables' prop in startSession?
+
+            const startOptions: any = {
+                agentId: agentId,
+            };
+
+            // If we have signed URL (for secured agents)
+            // Note: The SDK might not support signedUrl directly in startSession yet? 
+            // Check SDK version. Usually it handles auth internally if api key provided OR uses signed url.
+            // If using public agent, just agentId is enough.
+
+            await conversation.startSession(startOptions);
+
+            startSession('agent-session', 5); // Start UI session
+            setStatus('면접 진행 중');
+
+        } catch (e: any) {
+            console.error(e);
+            setStatus(`시작 실패: ${e.message}`);
         }
     };
 
     const handleEndInterview = async () => {
-        if (sessionId) {
-            endSession();
-            navigate(`/interview/feedback/${sessionId}`);
-        }
+        await conversation.endSession();
+        endSession();
+        // Navigate or show summary
     };
 
+    // Auto-scroll logic for chat
+    const chatContainerRef = useCallback((node: HTMLDivElement) => {
+        if (node) {
+            node.scrollTop = node.scrollHeight;
+        }
+    }, [chatHistory]);
+
     // Check prerequisites
-    if (!profileData) {
+    if (!resumeAnalysis) {
         return (
             <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
                 <div className="text-center">
                     <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
                     <h1 className="text-xl font-bold mb-2">프로필 설정이 필요합니다</h1>
-                    <Link to="/profile" className="text-indigo-400 hover:underline">
+                    <Link to="/profile" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg mt-4 inline-block">
                         프로필 설정으로 이동
                     </Link>
                 </div>
@@ -179,50 +130,56 @@ export default function InterviewPage() {
             <header className="border-b border-white/10 bg-neutral-950/80 backdrop-blur-md">
                 <div className="container mx-auto px-6 h-16 flex items-center justify-between">
                     <Link to="/" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                            <span className="font-bold text-white">J</span>
-                        </div>
-                        <span className="font-bold text-xl tracking-tight">JobFit</span>
+                        <span className="font-bold text-xl tracking-tight">JobFit AI</span>
                     </Link>
-                    {isActive && (
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm text-neutral-400">
-                                질문 {questionNumber} / {totalQuestions}
-                            </span>
-                            <button
-                                onClick={handleEndInterview}
-                                className="px-3 py-1.5 text-sm text-red-400 hover:text-red-300 flex items-center gap-1"
-                            >
-                                <PhoneOff className="w-4 h-4" />
-                                종료
-                            </button>
-                        </div>
-                    )}
+
+                    <button onClick={() => setShowSettings(!showSettings)} className="text-neutral-400 hover:text-white">
+                        <Settings className="w-5 h-5" />
+                    </button>
                 </div>
             </header>
 
+            {/* Settings Modal (Temporary) */}
+            {showSettings && (
+                <div className="absolute top-16 right-6 bg-neutral-800 p-4 rounded-lg border border-white/10 z-50 w-80 shadow-xl">
+                    <h3 className="font-medium mb-2">설정 (개발용)</h3>
+                    <label className="block text-xs text-neutral-400 mb-1">Agent ID</label>
+                    <input
+                        type="text"
+                        value={agentIdInput}
+                        onChange={(e) => setAgentIdInput(e.target.value)}
+                        placeholder="ElevenLabs Agent ID 입력"
+                        className="w-full bg-neutral-900 border border-white/20 rounded px-2 py-1 text-sm mb-2"
+                    />
+                    <p className="text-xs text-neutral-500">
+                        * 서버 .env에 ELEVENLABS_AGENT_ID를 설정하면 자동 로드됩니다.
+                    </p>
+                </div>
+            )}
+
             {/* Main Content */}
             <main className="flex-1 flex items-center justify-center p-6">
-                {!isActive ? (
+                {conversation.status !== 'connected' ? (
                     // Start Screen
                     <div className="text-center w-full max-w-2xl">
-                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-violet-500/20 flex items-center justify-center">
+                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-violet-500/20 flex items-center justify-center animate-pulse-slow">
                             <Mic className="w-12 h-12 text-violet-400" />
                         </div>
-                        <h1 className="text-3xl font-bold mb-4">AI 모의 면접</h1>
+                        <h1 className="text-3xl font-bold mb-4">AI 실시간 면접 (Agent Ver.)</h1>
                         <p className="text-neutral-400 mb-8">
-                            실시간 음성 AI 면접관과 함께 면접 연습을 시작하세요.
+                            ElevenLabs Conversational AI가 면접을 진행합니다.<br />
+                            자연스럽게 대화하고, 언제든 말을 끊을 수 있습니다.
                         </p>
 
                         <button
                             onClick={handleStartInterview}
-                            disabled={isStarting}
+                            disabled={conversation.status === 'connecting'}
                             className="px-8 py-4 bg-violet-600 hover:bg-violet-500 disabled:bg-neutral-700 rounded-xl font-medium text-lg flex items-center gap-3 mx-auto transition-colors"
                         >
-                            {isStarting ? (
+                            {conversation.status === 'connecting' ? (
                                 <>
                                     <Loader2 className="w-6 h-6 animate-spin" />
-                                    면접 준비 중...
+                                    연결 중...
                                 </>
                             ) : (
                                 <>
@@ -231,114 +188,52 @@ export default function InterviewPage() {
                                 </>
                             )}
                         </button>
-
-                        {error && (
-                            <p className="mt-4 text-red-400">{error}</p>
-                        )}
+                        <p className="mt-4 text-sm text-neutral-500">{status}</p>
                     </div>
                 ) : (
-                    // Interview Session - Two Column Layout
-                    <div className="w-full max-w-6xl flex gap-6">
-                        {/* Left Column - Interview Area */}
-                        <div className="flex-1 max-w-2xl">
-                            {/* Interviewer Avatar */}
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                                    <Volume2 className={`w-8 h-8 ${audioPlaying ? 'animate-pulse' : ''}`} />
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold">AI 면접관</h3>
-                                    <p className="text-sm text-neutral-400">전문적 · 친절한 면접관</p>
-                                </div>
+                    // Active Session
+                    <div className="w-full max-w-6xl flex gap-6 h-[80vh]">
+                        {/* Visualizer */}
+                        <div className="flex-1 bg-neutral-900 rounded-2xl flex flex-col items-center justify-center relative overflow-hidden border border-white/5">
+                            <div className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 ${conversation.isSpeaking ? 'bg-violet-500 shadow-[0_0_80px_rgba(139,92,246,0.6)] scale-110' : 'bg-neutral-800'}`}>
+                                <Volume2 className={`w-20 h-20 text-white ${conversation.isSpeaking ? 'animate-bounce' : ''}`} />
+                            </div>
+                            <div className="mt-8">
+                                <span className={`px-3 py-1 rounded-full text-sm ${conversation.isSpeaking ? 'bg-violet-500/20 text-violet-300' : 'bg-neutral-800 text-neutral-400'}`}>
+                                    {conversation.isSpeaking ? 'AI가 말하는 중...' : '듣고 있음...'}
+                                </span>
                             </div>
 
-                            {/* Current Question */}
-                            <div className="p-6 bg-neutral-900 rounded-2xl mb-6">
-                                <p className="text-lg">{currentQuestion}</p>
-                            </div>
-
-                            {/* Answer Input */}
-                            <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-sm text-neutral-400">나의 답변</span>
-                                    <button
-                                        onClick={toggleListening}
-                                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${isListening
-                                            ? 'bg-red-500 animate-pulse'
-                                            : 'bg-violet-600 hover:bg-violet-500'
-                                            }`}
-                                    >
-                                        {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                                    </button>
-                                </div>
-
-                                <textarea
-                                    value={transcript}
-                                    onChange={(e) => setTranscript(e.target.value)}
-                                    placeholder={isListening ? '듣고 있습니다...' : '마이크 버튼을 누르거나 직접 입력하세요'}
-                                    className="w-full h-32 bg-transparent border-none resize-none focus:outline-none text-lg placeholder:text-neutral-600"
-                                />
-
-                                <div className="flex justify-end mt-4">
-                                    <button
-                                        onClick={handleSubmitAnswer}
-                                        disabled={isSending || !transcript.trim()}
-                                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-700 disabled:cursor-not-allowed rounded-xl font-medium flex items-center gap-2 transition-colors"
-                                    >
-                                        {isSending ? (
-                                            <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                전송 중...
-                                            </>
-                                        ) : (
-                                            '답변 제출'
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
+                            <button
+                                onClick={handleEndInterview}
+                                className="absolute bottom-8 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg flex items-center gap-2 transition-colors"
+                            >
+                                <PhoneOff className="w-4 h-4" />
+                                면접 종료
+                            </button>
                         </div>
 
-                        {/* Right Column - Conversation History */}
-                        <div className="w-80 flex-shrink-0">
-                            <div className="sticky top-24 p-4 bg-white/5 rounded-2xl border border-white/10 h-[calc(100vh-150px)]">
-                                <h4 className="text-sm font-medium text-neutral-400 mb-4 flex items-center gap-2">
-                                    💬 대화 기록
-                                    <span className="px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded-full text-xs">
-                                        {conversation.length}
-                                    </span>
-                                </h4>
-                                <div className="space-y-3 overflow-y-auto h-[calc(100%-40px)] pr-2">
-                                    {conversation.map((msg, i) => (
-                                        <div
-                                            key={i}
-                                            className={`p-3 rounded-lg text-sm transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${msg.role === 'interviewer'
-                                                ? 'bg-violet-500/10 text-violet-200 border-l-2 border-violet-500'
-                                                : 'bg-indigo-500/10 text-indigo-200 border-l-2 border-indigo-500'
-                                                }`}
-                                        >
-                                            <span className="font-medium text-xs block mb-1 opacity-60">
-                                                {msg.role === 'interviewer' ? '🎤 면접관' : '👤 나'}
-                                            </span>
-                                            <span className="line-clamp-4">{msg.content}</span>
+                        {/* Transcript */}
+                        <div className="w-full max-w-md bg-white/5 rounded-2xl border border-white/10 flex flex-col">
+                            <div className="p-4 border-b border-white/10 bg-neutral-900/50">
+                                <h3 className="font-semibold text-sm text-neutral-300">실시간 대화</h3>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatContainerRef}>
+                                {chatHistory.map((msg: any, i: number) => (
+                                    <div key={i} className={`flex ${msg.role === 'interviewer' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'interviewer'
+                                            ? 'bg-neutral-800 text-neutral-200 rounded-tl-none'
+                                            : 'bg-violet-600 text-white rounded-tr-none'
+                                            }`}>
+                                            <p className="text-sm">{msg.content}</p>
                                         </div>
-                                    ))}
-                                    {conversation.length === 0 && (
-                                        <p className="text-neutral-500 text-sm text-center py-8">
-                                            대화가 시작되면 여기에 표시됩니다
-                                        </p>
-                                    )}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
                 )}
             </main>
-
-            {/* Background */}
-            <div className="fixed inset-0 -z-10 h-full w-full bg-neutral-950">
-                <div className="absolute bottom-0 left-0 right-0 top-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
-                <div className="absolute top-0 w-full h-[400px] bg-gradient-to-b from-violet-500/10 to-transparent blur-3xl opacity-30"></div>
-            </div>
         </div>
     );
 }
