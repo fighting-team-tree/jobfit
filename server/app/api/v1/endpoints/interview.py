@@ -233,17 +233,50 @@ async def get_interview_feedback(session_id: str):
     end = datetime.fromisoformat(session.ended_at.replace("Z", "+00:00"))
     duration = int((end - start).total_seconds())
 
-    # LLM 기반 피드백 생성 (폴백 포함)
-    try:
-        llm_feedback = await llm_service.generate_interview_feedback(
-            conversation_history=session.conversation_history,
-            profile=session.profile,
-            jd_text=session.jd_text,
-            persona=session.persona,
-        )
-    except Exception as e:
-        print(f"[Interview] LLM feedback generation failed: {e}")
-        llm_feedback = llm_service._default_interview_feedback()
+    # TEST_MODE: LLM 호출 없이 고정 피드백 반환
+    if settings.TEST_MODE:
+        llm_feedback = {
+            "scores": {
+                "technical_accuracy": 82,
+                "communication": 78,
+                "problem_solving": 75,
+                "job_fit": 80,
+                "overall": 79,
+            },
+            "feedback_summary": "전반적으로 기술적 역량이 잘 드러나는 면접이었습니다. FastAPI와 비동기 처리에 대한 실무 경험이 구체적으로 전달되었으며, 문제 해결 과정을 논리적으로 설명하는 능력이 돋보였습니다. 다만 일부 답변에서 좀 더 구체적인 수치나 성과 지표를 함께 언급하면 설득력이 높아질 것입니다.",
+            "strengths": [
+                "FastAPI, WebSocket 등 기술 스택에 대한 실무 경험이 구체적으로 드러남",
+                "메모리 누수 해결 사례 등 실제 문제 해결 과정을 잘 설명함",
+                "데이터 기반 의사결정 접근 방식이 논리적이고 팀워크 역량을 보여줌",
+            ],
+            "improvements": [
+                "답변에 구체적인 수치(성능 개선율, 처리량 등)를 포함하면 더 효과적",
+                "프로젝트의 비즈니스 임팩트나 사용자 수 등 맥락 정보 추가 필요",
+                "마지막 질문(역질문)에서 팀 문화 외에 기술적 도전 과제에 대해서도 질문하면 좋음",
+            ],
+            "sample_answers": [
+                {
+                    "question": "FastAPI를 사용한 프로젝트에서 가장 어려웠던 기술적 문제가 있었나요?",
+                    "suggestion": "WebSocket 기반 실시간 처리 시 동시 접속 500명 환경에서 메모리 누수가 발생했습니다. asyncio 이벤트 루프 프로파일링으로 원인을 파악하고, connection pool 크기 조정과 weak reference 패턴을 적용하여 메모리 사용량을 40% 줄였습니다.",
+                },
+                {
+                    "question": "팀에서 기술적 의견 충돌이 있었을 때 어떻게 해결하셨나요?",
+                    "suggestion": "REST vs GraphQL 선택에서 의견이 갈렸을 때, 두 방식으로 프로토타입을 만들고 응답 시간과 개발 생산성을 비교 측정했습니다. 결과적으로 우리 서비스 특성에 맞는 REST를 선택했고, 이 과정을 통해 팀의 의사결정 프로세스도 개선되었습니다.",
+                },
+            ],
+        }
+    else:
+        # LLM 기반 피드백 생성 (폴백 포함)
+        try:
+            llm_feedback = await llm_service.generate_interview_feedback(
+                conversation_history=session.conversation_history,
+                profile=session.profile,
+                jd_text=session.jd_text,
+                persona=session.persona,
+            )
+        except Exception as e:
+            print(f"[Interview] LLM feedback generation failed: {e}")
+            llm_feedback = llm_service._default_interview_feedback()
 
     return InterviewFeedbackResponse(
         session_id=session_id,
