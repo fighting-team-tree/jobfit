@@ -1,27 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings } from 'lucide-react';
 import { useConversation } from '@elevenlabs/react';
-import { analysisAPI } from '../lib/api';
+import { analysisAPI, interviewAPI } from '../lib/api';
 import { useProfileStore, useInterviewStore } from '../lib/store';
 
 const API_BASE = import.meta.env.VITE_API_URL ||
     (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 export default function InterviewPage() {
+    const navigate = useNavigate();
     const { profile: resumeAnalysis, setProfile } = useProfileStore();
     const {
-        startSession, endSession, addMessage, conversation: chatHistory
+        startSession, endSession, addMessage, clearConversation,
+        conversation: chatHistory, persona, jdText, profileData,
     } = useInterviewStore();
 
     const [status, setStatus] = useState<string>('준비');
     const [agentIdInput, setAgentIdInput] = useState('');
     const [showSettings, setShowSettings] = useState(false);
     const [isAutoLoading, setIsAutoLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isEnding, setIsEnding] = useState(false);
+
+    // 프로필 결정: InterviewStore 우선, 없으면 ProfileStore
+    const effectiveProfile = profileData || resumeAnalysis;
 
     // TEST_MODE: 프로필 없으면 fixture 자동 로드
     useEffect(() => {
-        if (!resumeAnalysis) {
+        if (!effectiveProfile) {
             analysisAPI.getFixtures().then(async (res) => {
                 if (res.test_mode && res.profiles.length > 0) {
                     setIsAutoLoading(true);
@@ -38,17 +45,21 @@ export default function InterviewPage() {
                 }
             }).catch(() => {});
         }
-    }, [resumeAnalysis, setProfile]);
+    }, [effectiveProfile, setProfile]);
 
     // ElevenLabs Conversation Hook
     const conversation = useConversation({
-        onConnect: () => setStatus('연결됨'),
+        onConnect: () => {
+            console.log('[ElevenLabs] Connected');
+            setStatus('연결됨');
+            setError(null);
+        },
         onDisconnect: () => {
+            console.log('[ElevenLabs] Disconnected');
             setStatus('연결 종료');
-            endSession(); // End internal session state
         },
         onMessage: (message) => {
-            // Visualize chat - ElevenLabs SDK uses 'ai' for agent messages
+            console.log('[ElevenLabs] Message:', message);
             if (message.source === 'user' || message.source === 'ai') {
                 addMessage(
                     message.source === 'ai' ? 'interviewer' : 'user',
@@ -56,18 +67,19 @@ export default function InterviewPage() {
                 );
             }
         },
-        onError: (error) => {
-            console.error(error);
-            setStatus(`에러: ${error}`);
+        onError: (err: unknown) => {
+            console.error('[ElevenLabs] Error:', err);
+            setError(`연결 오류: ${err instanceof Error ? err.message : String(err)}`);
+            setStatus('에러');
         },
     });
 
     // Start Interview Handler
     const handleStartInterview = async () => {
         try {
+            setError(null);
             setStatus('인증 토큰 요청 중...');
 
-            // 1. Get Authentication (Agent ID & Signed URL) from Backend
             const response = await fetch(`${API_BASE}/interview/agent-auth`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -75,54 +87,76 @@ export default function InterviewPage() {
             const data = await response.json();
 
             let agentId = data.agent_id;
+            const signedUrl = data.signed_url;
 
-            // Fallback: If backend doesn't have ID, use Input
             if (!agentId && agentIdInput) {
-                // If using direct input, we might not have signed URL (insecure but works for local testing)
                 agentId = agentIdInput;
             }
 
             if (!agentId) {
-                alert("Agent ID가 설정되지 않았습니다. 설정 버튼을 눌러 ID를 입력하거나 서버 .env를 확인하세요.");
+                setError('Agent ID가 설정되지 않았습니다. 설정 버튼을 눌러 ID를 입력하거나 서버 .env의 ELEVENLABS_AGENT_ID를 확인하세요.');
                 setStatus('설정 필요');
                 return;
             }
 
             setStatus('연결 중...');
 
-            // 2. Connect to ElevenLabs
-            // To pass dynamic variables (Resume, JD), we need to use 'clientTools' or 'overrides'
-            // But basic agent just starts here.
-
-            // Dynamic Variables Injection (Best Practice)
-            // Need to configure variables in Agent settings first, e.g. {{resume}}, {{job_description}}
-            // Then pass them here. 
-            // NOTE: @elevenlabs/react v0.0.x might support dynamic variables via 'dynamicVariables' prop in startSession?
-
-            const startOptions: any = {
-                agentId: agentId,
-            };
-
-            // If we have signed URL (for secured agents)
-            // Note: The SDK might not support signedUrl directly in startSession yet? 
-            // Check SDK version. Usually it handles auth internally if api key provided OR uses signed url.
-            // If using public agent, just agentId is enough.
+            // signedUrl이 있으면 사용 (private agent), 없으면 agentId로 연결 (public agent)
+            const startOptions: any = signedUrl
+                ? { signedUrl }
+                : { agentId };
 
             await conversation.startSession(startOptions);
 
-            startSession('agent-session', 5); // Start UI session
+            startSession('agent-session', 5);
             setStatus('면접 진행 중');
 
         } catch (e: any) {
             console.error(e);
-            setStatus(`시작 실패: ${e.message}`);
+            setError(`면접 시작에 실패했습니다: ${e.message}`);
+            setStatus('시작 실패');
         }
     };
 
     const handleEndInterview = async () => {
-        await conversation.endSession();
-        endSession();
-        // Navigate or show summary
+        setIsEnding(true);
+        try {
+            await conversation.endSession();
+
+            // 대화 기록을 서버에 전송하여 세션 생성
+            if (chatHistory.length > 0) {
+                const serverConversation = chatHistory.map(m => ({
+                    role: m.role === 'interviewer' ? 'interviewer' : 'candidate',
+                    content: m.content,
+                    timestamp: new Date(m.timestamp).toISOString(),
+                }));
+
+                const result = await interviewAPI.endSession(
+                    serverConversation,
+                    effectiveProfile || {},
+                    jdText,
+                    persona,
+                );
+
+                endSession();
+                navigate(`/interview/feedback/${result.session_id}`);
+                return;
+            }
+
+            endSession();
+        } catch (e: any) {
+            console.error('End session failed:', e);
+            endSession();
+            setError('면접 종료 처리 중 오류가 발생했습니다.');
+        } finally {
+            setIsEnding(false);
+        }
+    };
+
+    const handleRetry = () => {
+        setError(null);
+        setStatus('준비');
+        clearConversation();
     };
 
     // Auto-scroll logic for chat
@@ -133,7 +167,7 @@ export default function InterviewPage() {
     }, [chatHistory]);
 
     // Check prerequisites
-    if (!resumeAnalysis) {
+    if (!effectiveProfile) {
         if (isAutoLoading) {
             return (
                 <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center">
@@ -191,6 +225,22 @@ export default function InterviewPage() {
                 </div>
             )}
 
+            {/* Error Banner */}
+            {error && (
+                <div className="mx-6 mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                        <p className="text-red-400 text-sm">{error}</p>
+                    </div>
+                    <button
+                        onClick={handleRetry}
+                        className="px-3 py-1 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors"
+                    >
+                        다시 시도
+                    </button>
+                </div>
+            )}
+
             {/* Main Content */}
             <main className="flex-1 flex items-center justify-center p-6">
                 {conversation.status !== 'connected' ? (
@@ -240,10 +290,20 @@ export default function InterviewPage() {
 
                             <button
                                 onClick={handleEndInterview}
-                                className="absolute bottom-8 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg flex items-center gap-2 transition-colors"
+                                disabled={isEnding}
+                                className="absolute bottom-8 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-400 rounded-lg flex items-center gap-2 transition-colors"
                             >
-                                <PhoneOff className="w-4 h-4" />
-                                면접 종료
+                                {isEnding ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        종료 중...
+                                    </>
+                                ) : (
+                                    <>
+                                        <PhoneOff className="w-4 h-4" />
+                                        면접 종료
+                                    </>
+                                )}
                             </button>
                         </div>
 

@@ -261,6 +261,98 @@ JSON만 응답하세요."""
         )
         return content.strip()
 
+    async def generate_interview_feedback(
+        self,
+        conversation_history: list[dict],
+        profile: dict,
+        jd_text: str,
+        persona: str = "professional",
+    ) -> dict:
+        """면접 대화 내용을 분석하여 상세 피드백 생성."""
+        history_text = "\n".join(
+            f"{'면접관' if m.get('role') == 'interviewer' else '지원자'}: {m.get('content', '')}"
+            for m in conversation_history
+        )
+
+        # 프로필 요약 (너무 길면 truncate)
+        profile_summary = json.dumps(profile, ensure_ascii=False, default=str)
+        if len(profile_summary) > 1000:
+            profile_summary = profile_summary[:1000] + "..."
+
+        prompt = f"""당신은 채용 면접 평가 전문가입니다. 다음 면접 대화를 분석하여 평가해주세요.
+
+## 면접 정보
+- 면접관 스타일: {persona}
+- 지원 포지션 (채용공고): {jd_text[:500] if len(jd_text) > 500 else jd_text}
+
+## 지원자 프로필
+{profile_summary}
+
+## 대화 기록
+{history_text}
+
+## 평가 기준
+1. technical_accuracy (0-100): 기술적 정확성 - 답변의 기술적 깊이와 정확성
+2. communication (0-100): 커뮤니케이션 - 답변 구조, 논리적 전개, 명확성
+3. problem_solving (0-100): 문제 해결력 - 상황 대처, 구체적 사례 제시
+4. job_fit (0-100): 직무 적합성 - JD 요구사항과의 부합도
+5. overall (0-100): 종합 평가
+
+## 응답 형식 (JSON)
+{{
+    "scores": {{
+        "technical_accuracy": 0,
+        "communication": 0,
+        "problem_solving": 0,
+        "job_fit": 0,
+        "overall": 0
+    }},
+    "feedback_summary": "2-3문장 종합 평가",
+    "strengths": ["강점 1", "강점 2"],
+    "improvements": ["개선점 1", "개선점 2"],
+    "sample_answers": [
+        {{"question": "질문 내용", "suggestion": "더 좋은 답변 예시"}}
+    ]
+}}
+JSON만 응답하세요."""
+
+        result = await self._call_llm_json(
+            prompt,
+            system_msg="You are an expert interview evaluator. Always respond with valid JSON only.",
+            temperature=0.3,
+            max_tokens=1500,
+        )
+
+        if result.get("error"):
+            return self._default_interview_feedback()
+
+        # scores 검증: 모든 키가 있는지 확인
+        required_score_keys = ["technical_accuracy", "communication", "problem_solving", "job_fit", "overall"]
+        scores = result.get("scores", {})
+        for key in required_score_keys:
+            if key not in scores:
+                scores[key] = 70
+
+        result["scores"] = scores
+        return result
+
+    @staticmethod
+    def _default_interview_feedback() -> dict:
+        """LLM 실패 시 기본 피드백."""
+        return {
+            "scores": {
+                "technical_accuracy": 70,
+                "communication": 70,
+                "problem_solving": 70,
+                "job_fit": 70,
+                "overall": 70,
+            },
+            "feedback_summary": "면접 피드백을 생성하지 못했습니다. 다시 시도해주세요.",
+            "strengths": [],
+            "improvements": [],
+            "sample_answers": [],
+        }
+
     async def infer_skills_from_github(
         self,
         languages: dict,

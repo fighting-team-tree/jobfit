@@ -189,13 +189,17 @@ interface InterviewState {
   totalQuestions: number;
   persona: 'professional' | 'friendly' | 'challenging';
   conversation: Message[];
-  
+  jdText: string;
+  profileData: Record<string, unknown> | null;
+
   // Actions
   setPersona: (persona: 'professional' | 'friendly' | 'challenging') => void;
+  setInterviewContext: (profile: Record<string, unknown>, jdText: string) => void;
   startSession: (sessionId: string, totalQuestions: number) => void;
   setQuestion: (question: string, questionNumber: number) => void;
   addMessage: (role: 'interviewer' | 'user', content: string) => void;
   endSession: () => void;
+  clearConversation: () => void;
 }
 
 export const useInterviewStore = create<InterviewState>()((set) => ({
@@ -206,8 +210,11 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
   totalQuestions: 0,
   persona: 'professional',
   conversation: [],
-  
+  jdText: '',
+  profileData: null,
+
   setPersona: (persona) => set({ persona }),
+  setInterviewContext: (profile, jdText) => set({ profileData: profile, jdText }),
   startSession: (sessionId, totalQuestions) => set({
     sessionId,
     totalQuestions,
@@ -230,8 +237,9 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
     currentQuestion: '',
     questionNumber: 0,
     totalQuestions: 0,
-    conversation: [],
+    // conversation 유지 (피드백 전송용)
   }),
+  clearConversation: () => set({ conversation: [], jdText: '', profileData: null }),
 }));
 
 // ============ Problem Store ============

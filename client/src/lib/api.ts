@@ -335,6 +335,28 @@ export const interviewAPI = {
     const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/feedback`, fetchOptions);
     return handleResponse<InterviewFeedback>(response);
   },
+  /**
+   * End Agent-mode session and create server-side session for feedback
+   */
+  async endSession(
+    conversation: Array<{ role: string; content: string; timestamp: string }>,
+    profile: Record<string, unknown> = {},
+    jdText: string = '',
+    persona: string = 'professional',
+  ): Promise<{ session_id: string }> {
+    const response = await fetch(`${API_BASE_URL}/interview/end-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversation,
+        profile,
+        jd_text: jdText,
+        persona,
+      }),
+      ...fetchOptions,
+    });
+    return handleResponse<{ session_id: string }>(response);
+  },
 };
 
 export interface InterviewSession {
@@ -361,6 +383,9 @@ export interface InterviewFeedback {
   conversation: Array<{ role: string; content: string; timestamp: string }>;
   feedback_summary: string;
   scores: Record<string, number>;
+  strengths: string[];
+  improvements: string[];
+  sample_answers: Array<{ question: string; suggestion: string }>;
 }
 
 // ============ Roadmap Types ============

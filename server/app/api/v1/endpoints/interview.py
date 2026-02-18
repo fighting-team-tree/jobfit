@@ -7,7 +7,7 @@ Handles real-time mock interview via WebSocket with ElevenLabs TTS.
 import asyncio
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.services.elevenlabs_service import elevenlabs_service
@@ -53,10 +53,22 @@ class InterviewFeedbackResponse(BaseModel):
     conversation: list[dict]
     feedback_summary: str
     scores: dict
+    strengths: list[str] = []
+    improvements: list[str] = []
+    sample_answers: list[dict] = []
 
 
 class InterviewAnswerRequest(BaseModel):
     answer: str
+
+
+class EndSessionRequest(BaseModel):
+    """Request to end an Agent-mode interview session."""
+
+    conversation: list[dict]
+    profile: dict = {}
+    jd_text: str = ""
+    persona: str = "professional"
 
 
 # ============ In-memory session storage ============
@@ -203,46 +215,76 @@ async def respond_to_question(
 async def get_interview_feedback(session_id: str):
     """
     Get feedback summary for a completed interview session.
+    Uses LLM to analyze conversation and generate detailed feedback.
     """
     if session_id not in active_sessions:
         raise HTTPException(status_code=404, detail="Session not found")
 
     session = active_sessions[session_id]
 
+    now_utc = datetime.now(tz=timezone.utc).isoformat()
     if not session.started_at:
-        session.started_at = datetime.now().isoformat()
+        session.started_at = now_utc
     if not session.ended_at:
-        session.ended_at = datetime.now().isoformat()
+        session.ended_at = now_utc
 
-    # Calculate duration
-    start = datetime.fromisoformat(session.started_at)
-    end = datetime.fromisoformat(session.ended_at)
+    # Calculate duration (timezone 통일: 'Z' → '+00:00' 변환 후 파싱)
+    start = datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+    end = datetime.fromisoformat(session.ended_at.replace("Z", "+00:00"))
     duration = int((end - start).total_seconds())
 
-    feedback_summary = f"""
-면접 세션이 완료되었습니다.
-
-총 {session.question_count}개의 질문에 답변하셨습니다.
-소요 시간: {duration // 60}분 {duration % 60}초
-면접관 스타일: {session.persona}
-
-전반적으로 면접에 성실히 임해주셨습니다.
-기술적 질문에 대한 답변의 구체성을 높이시면 더 좋은 인상을 남길 수 있습니다.
-    """.strip()
+    # LLM 기반 피드백 생성 (폴백 포함)
+    try:
+        llm_feedback = await llm_service.generate_interview_feedback(
+            conversation_history=session.conversation_history,
+            profile=session.profile,
+            jd_text=session.jd_text,
+            persona=session.persona,
+        )
+    except Exception as e:
+        print(f"[Interview] LLM feedback generation failed: {e}")
+        llm_feedback = llm_service._default_interview_feedback()
 
     return InterviewFeedbackResponse(
         session_id=session_id,
         total_questions=session.question_count,
         duration_seconds=duration,
         conversation=session.conversation_history,
-        feedback_summary=feedback_summary,
-        scores={
-            "technical_accuracy": 75,
-            "communication": 80,
-            "problem_solving": 70,
-            "overall": 75,
-        },
+        feedback_summary=llm_feedback.get("feedback_summary", ""),
+        scores=llm_feedback.get("scores", {}),
+        strengths=llm_feedback.get("strengths", []),
+        improvements=llm_feedback.get("improvements", []),
+        sample_answers=llm_feedback.get("sample_answers", []),
     )
+
+
+@router.post("/end-session")
+async def end_session(request: EndSessionRequest):
+    """
+    End an Agent-mode interview session.
+    Creates a server-side session from client conversation data
+    so feedback can be retrieved via GET /{session_id}/feedback.
+    """
+    import uuid
+
+    session_id = str(uuid.uuid4())[:8]
+
+    question_count = len([m for m in request.conversation if m.get("role") == "interviewer"])
+    first_ts = request.conversation[0].get("timestamp") if request.conversation else None
+
+    session = InterviewSession(
+        session_id=session_id,
+        profile=request.profile,
+        jd_text=request.jd_text,
+        persona=request.persona,
+        conversation_history=request.conversation,
+        question_count=question_count,
+        started_at=first_ts or datetime.now(tz=timezone.utc).isoformat(),
+        ended_at=datetime.now(tz=timezone.utc).isoformat(),
+    )
+
+    active_sessions[session_id] = session
+    return {"session_id": session_id}
 
 
 # ============ TTS Test Endpoint ============
@@ -285,7 +327,7 @@ async def get_agent_auth():
     """Get signed URL for ElevenLabs Agent authentication."""
     agent_id = settings.ELEVENLABS_AGENT_ID
 
-    if not agent_id or agent_id == "your_agent_id":
+    if not agent_id or agent_id.startswith("your_"):
         return {
             "signed_url": None,
             "agent_id": None,
@@ -296,7 +338,9 @@ async def get_agent_auth():
         signed_url = await elevenlabs_service.get_signed_url(agent_id)
         return {"signed_url": signed_url, "agent_id": agent_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to sign URL: {str(e)}") from e
+        # Signed URL 실패 시 agent_id만 반환 (public agent는 직접 연결 가능)
+        print(f"[Interview] Signed URL failed: {e}. Falling back to agentId only.")
+        return {"signed_url": None, "agent_id": agent_id}
 
 
 # ============ WebSocket Endpoint (Full-Duplex) ============
