@@ -376,6 +376,24 @@ export interface InterviewResponse {
   total_questions?: number;
 }
 
+export interface StarAnalysisItem {
+  question: string;
+  answer_summary: string;
+  situation: boolean;
+  task: boolean;
+  action: boolean;
+  result: boolean;
+  feedback: string;
+}
+
+export interface TimeAnalysis {
+  per_question: Array<{ question: string; response_seconds: number | null }>;
+  avg_response_seconds: number;
+  max_response_seconds: number;
+  min_response_seconds: number;
+  total_pairs: number;
+}
+
 export interface InterviewFeedback {
   session_id: string;
   total_questions: number;
@@ -386,6 +404,8 @@ export interface InterviewFeedback {
   strengths: string[];
   improvements: string[];
   sample_answers: Array<{ question: string; suggestion: string }>;
+  star_analysis?: StarAnalysisItem[];
+  time_analysis?: TimeAnalysis;
 }
 
 // ============ Roadmap Types ============

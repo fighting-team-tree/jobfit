@@ -11,6 +11,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const InterviewPage = lazy(() => import('./pages/InterviewPage'))
 const InterviewFeedbackPage = lazy(() => import('./pages/InterviewFeedbackPage'))
+const InterviewHistoryPage = lazy(() => import('./pages/InterviewHistoryPage'))
 const RoadmapPage = lazy(() => import('./pages/RoadmapPage'))
 const ProblemPage = lazy(() => import('./pages/ProblemPage'))
 const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/interview" element={<InterviewPage />} />
               <Route path="/interview/feedback/:sessionId" element={<InterviewFeedbackPage />} />
+              <Route path="/interview/history" element={<InterviewHistoryPage />} />
               <Route path="/roadmap" element={<RoadmapPage />} />
               <Route path="/problem/:id" element={<ProblemPage />} />
               <Route path="/companies" element={<CompaniesPage />} />

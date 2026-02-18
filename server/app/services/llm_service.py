@@ -218,7 +218,7 @@ JSON만 응답하세요."""
     async def generate_interview_question(
         self, profile: dict, jd_text: str, conversation_history: list, persona: str = "professional"
     ) -> str:
-        """Generate an interview question."""
+        """Generate an interview question with follow-up and adaptive difficulty."""
         persona_prompts = {
             "professional": "당신은 전문적이고 차분한 면접관입니다. 기술적 깊이를 확인하는 질문을 합니다.",
             "friendly": "당신은 친근하고 편안한 분위기의 면접관입니다. 지원자가 편하게 답변할 수 있도록 합니다.",
@@ -244,7 +244,17 @@ JSON만 응답하세요."""
 {history_text}
 
 위 정보를 바탕으로 다음 면접 질문 하나를 생성하세요.
-- 이전 대화를 고려하여 꼬리물기 질문이나 새로운 주제의 질문을 하세요.
+
+## 꼬리 질문 규칙
+- 이전 답변이 모호하거나 추상적이면 반드시 구체화를 요청하는 꼬리 질문을 하세요.
+  예: "조금 더 구체적으로 설명해주실 수 있나요?", "그 과정에서 본인의 역할은 구체적으로 무엇이었나요?"
+- 이전 답변이 충실하면 같은 주제를 더 깊이 파거나 새로운 주제로 전환하세요.
+- STAR 기법(Situation-Task-Action-Result) 요소가 빠진 답변에는 빠진 요소를 유도하는 질문을 하세요.
+
+## 적응형 난이도
+- 이전 답변 품질을 평가하고 난이도를 조절하세요:
+  - 답변이 구체적이고 기술적 깊이가 있으면 → 더 어려운 심화 질문
+  - 답변이 짧거나 일반적이면 → 기초적이고 열린 질문으로 유도
 - 질문은 한국어로, 간결하게 작성하세요.
 - 질문만 출력하세요."""
 
@@ -298,6 +308,13 @@ JSON만 응답하세요."""
 4. job_fit (0-100): 직무 적합성 - JD 요구사항과의 부합도
 5. overall (0-100): 종합 평가
 
+## STAR 분석
+행동 기반 답변(경험 사례)에 대해 STAR 기법 요소 분석을 수행하세요:
+- S(Situation): 상황 설명이 있는가
+- T(Task): 본인의 과업/역할이 명시되었는가
+- A(Action): 구체적 행동이 서술되었는가
+- R(Result): 결과/성과가 언급되었는가
+
 ## 응답 형식 (JSON)
 {{
     "scores": {{
@@ -312,6 +329,17 @@ JSON만 응답하세요."""
     "improvements": ["개선점 1", "개선점 2"],
     "sample_answers": [
         {{"question": "질문 내용", "suggestion": "더 좋은 답변 예시"}}
+    ],
+    "star_analysis": [
+        {{
+            "question": "해당 질문",
+            "answer_summary": "답변 요약",
+            "situation": true,
+            "task": true,
+            "action": true,
+            "result": false,
+            "feedback": "Result 요소가 빠져 있습니다. 구체적인 성과 수치를 추가하면 좋겠습니다."
+        }}
     ]
 }}
 JSON만 응답하세요."""
@@ -320,7 +348,7 @@ JSON만 응답하세요."""
             prompt,
             system_msg="You are an expert interview evaluator. Always respond with valid JSON only.",
             temperature=0.3,
-            max_tokens=1500,
+            max_tokens=2500,
         )
 
         if result.get("error"):
@@ -351,6 +379,7 @@ JSON만 응답하세요."""
             "strengths": [],
             "improvements": [],
             "sample_answers": [],
+            "star_analysis": [],
         }
 
     async def infer_skills_from_github(

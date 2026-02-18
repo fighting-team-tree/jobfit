@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, AlertCircle, Loader2, TrendingUp, Target, Lightbulb, Clock, MessageSquare, RotateCcw, LayoutDashboard } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, TrendingUp, Target, Lightbulb, Clock, MessageSquare, RotateCcw, LayoutDashboard, History, Star, Timer, PlayCircle, Check, X } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { interviewAPI, type InterviewFeedback } from '../lib/api';
-import { useInterviewStore } from '../lib/store';
+import { useInterviewStore, useInterviewHistoryStore } from '../lib/store';
 
 // ============ 원형 점수 게이지 ============
 
@@ -12,7 +13,6 @@ function ScoreGauge({ value, label, size = 100 }: { value: number; label: string
     const offset = circumference - (value / 100) * circumference;
 
     const color = value >= 80 ? '#34d399' : value >= 60 ? '#fbbf24' : '#f87171';
-    const bgColor = value >= 80 ? 'rgba(52,211,153,0.1)' : value >= 60 ? 'rgba(251,191,36,0.1)' : 'rgba(248,113,113,0.1)';
 
     return (
         <div className="flex flex-col items-center gap-2">
@@ -54,10 +54,15 @@ function ScoreBadge({ value }: { value: number }) {
 export default function InterviewFeedbackPage() {
     const { sessionId } = useParams();
     const { clearConversation } = useInterviewStore();
+    const { addEntry } = useInterviewHistoryStore();
     const [feedback, setFeedback] = useState<InterviewFeedback | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [showConversation, setShowConversation] = useState(false);
+    const [showStarAnalysis, setShowStarAnalysis] = useState(true);
+    const [showTimeAnalysis, setShowTimeAnalysis] = useState(true);
+    const [showReplay, setShowReplay] = useState(false);
+    const historySavedRef = useRef(false);
 
     useEffect(() => {
         if (!sessionId) {
@@ -81,6 +86,24 @@ export default function InterviewFeedbackPage() {
 
         loadFeedback();
     }, [sessionId, clearConversation]);
+
+    // 피드백 로드 완료 시 히스토리 자동 저장
+    useEffect(() => {
+        if (feedback && sessionId && !historySavedRef.current) {
+            historySavedRef.current = true;
+            addEntry({
+                id: crypto.randomUUID(),
+                sessionId,
+                date: new Date().toISOString(),
+                interviewType: 'comprehensive',
+                persona: 'professional',
+                scores: feedback.scores,
+                totalQuestions: feedback.total_questions,
+                durationSeconds: feedback.duration_seconds,
+                feedbackSummary: feedback.feedback_summary,
+            });
+        }
+    }, [feedback, sessionId, addEntry]);
 
     const scoreLabel: Record<string, string> = {
         technical_accuracy: '기술 정확성',
@@ -106,6 +129,10 @@ export default function InterviewFeedbackPage() {
                         <span className="font-bold text-xl tracking-tight">JobFit</span>
                     </Link>
                     <div className="flex gap-4">
+                        <Link to="/interview/history" className="text-neutral-400 hover:text-white text-sm flex items-center gap-1.5">
+                            <History className="w-3.5 h-3.5" />
+                            히스토리
+                        </Link>
                         <Link to="/interview" className="text-neutral-400 hover:text-white text-sm flex items-center gap-1.5">
                             <RotateCcw className="w-3.5 h-3.5" />
                             다시 면접하기
@@ -243,6 +270,163 @@ export default function InterviewFeedbackPage() {
                                             </div>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* STAR Analysis */}
+                            {feedback.star_analysis && feedback.star_analysis.length > 0 && (
+                                <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 overflow-hidden">
+                                    <button
+                                        onClick={() => setShowStarAnalysis(!showStarAnalysis)}
+                                        className="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Star className="w-5 h-5 text-indigo-400" />
+                                            <h3 className="font-semibold">STAR 기법 분석</h3>
+                                            <span className="text-xs text-neutral-500">{feedback.star_analysis.length}개 답변</span>
+                                        </div>
+                                        <span className={`text-neutral-500 transition-transform ${showStarAnalysis ? 'rotate-180' : ''}`}>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
+                                        </span>
+                                    </button>
+                                    {showStarAnalysis && (
+                                        <div className="px-5 pb-5 space-y-4">
+                                            {feedback.star_analysis.map((item, idx) => (
+                                                <div key={idx} className="bg-neutral-900/50 rounded-xl p-4 border border-white/5">
+                                                    <p className="text-xs text-indigo-400 font-medium mb-2">Q. {item.question}</p>
+                                                    <p className="text-sm text-neutral-300 mb-3">{item.answer_summary}</p>
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        {(['situation', 'task', 'action', 'result'] as const).map((key) => (
+                                                            <div key={key} className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                                                                item[key]
+                                                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                            }`}>
+                                                                {item[key] ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                                                {key.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-xs text-neutral-400">{item.feedback}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Time Analysis */}
+                            {feedback.time_analysis && feedback.time_analysis.per_question && feedback.time_analysis.per_question.length > 0 && (
+                                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 overflow-hidden">
+                                    <button
+                                        onClick={() => setShowTimeAnalysis(!showTimeAnalysis)}
+                                        className="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Timer className="w-5 h-5 text-cyan-400" />
+                                            <h3 className="font-semibold">답변 시간 분석</h3>
+                                        </div>
+                                        <span className={`text-neutral-500 transition-transform ${showTimeAnalysis ? 'rotate-180' : ''}`}>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
+                                        </span>
+                                    </button>
+                                    {showTimeAnalysis && (
+                                        <div className="px-5 pb-5">
+                                            {/* 통계 요약 */}
+                                            <div className="grid grid-cols-3 gap-3 mb-5">
+                                                <div className="bg-neutral-900/50 rounded-lg p-3 text-center border border-white/5">
+                                                    <p className="text-lg font-bold text-cyan-400">{feedback.time_analysis.avg_response_seconds}s</p>
+                                                    <p className="text-xs text-neutral-500">평균 응답</p>
+                                                </div>
+                                                <div className="bg-neutral-900/50 rounded-lg p-3 text-center border border-white/5">
+                                                    <p className="text-lg font-bold text-amber-400">{feedback.time_analysis.max_response_seconds}s</p>
+                                                    <p className="text-xs text-neutral-500">최장 응답</p>
+                                                </div>
+                                                <div className="bg-neutral-900/50 rounded-lg p-3 text-center border border-white/5">
+                                                    <p className="text-lg font-bold text-emerald-400">{feedback.time_analysis.min_response_seconds}s</p>
+                                                    <p className="text-xs text-neutral-500">최단 응답</p>
+                                                </div>
+                                            </div>
+                                            {/* 질문별 바 차트 */}
+                                            <div className="h-48">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={feedback.time_analysis.per_question.map((q, i) => ({
+                                                        name: `Q${i + 1}`,
+                                                        seconds: q.response_seconds ?? 0,
+                                                        question: q.question,
+                                                    }))}>
+                                                        <XAxis dataKey="name" tick={{ fill: '#a3a3a3', fontSize: 12 }} />
+                                                        <YAxis tick={{ fill: '#a3a3a3', fontSize: 12 }} unit="s" />
+                                                        <Tooltip
+                                                            contentStyle={{ backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }}
+                                                            labelStyle={{ color: '#a3a3a3' }}
+                                                            formatter={(value: unknown) => [`${value}초`, '응답 시간']}
+                                                        />
+                                                        <Bar dataKey="seconds" radius={[4, 4, 0, 0]}>
+                                                            {feedback.time_analysis.per_question.map((_, i) => (
+                                                                <Cell key={i} fill={i % 2 === 0 ? '#22d3ee' : '#06b6d4'} />
+                                                            ))}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Interview Replay */}
+                            {feedback.conversation.length > 0 && feedback.sample_answers && feedback.sample_answers.length > 0 && (
+                                <div className="rounded-2xl border border-orange-500/20 bg-orange-500/5 overflow-hidden">
+                                    <button
+                                        onClick={() => setShowReplay(!showReplay)}
+                                        className="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <PlayCircle className="w-5 h-5 text-orange-400" />
+                                            <h3 className="font-semibold">면접 리플레이</h3>
+                                            <span className="text-xs text-neutral-500">Before/After 비교</span>
+                                        </div>
+                                        <span className={`text-neutral-500 transition-transform ${showReplay ? 'rotate-180' : ''}`}>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
+                                        </span>
+                                    </button>
+                                    {showReplay && (
+                                        <div className="px-5 pb-5 space-y-4">
+                                            {(() => {
+                                                // Q&A 쌍으로 재구성
+                                                const qaPairs: Array<{ question: string; answer: string }> = [];
+                                                for (let i = 0; i < feedback.conversation.length - 1; i++) {
+                                                    if (feedback.conversation[i].role === 'interviewer' && feedback.conversation[i + 1].role === 'candidate') {
+                                                        qaPairs.push({
+                                                            question: feedback.conversation[i].content,
+                                                            answer: feedback.conversation[i + 1].content,
+                                                        });
+                                                    }
+                                                }
+                                                return qaPairs.map((qa, idx) => {
+                                                    const suggestion = feedback.sample_answers?.find(sa => sa.question === qa.question);
+                                                    return (
+                                                        <div key={idx} className="bg-neutral-900/50 rounded-xl p-4 border border-white/5">
+                                                            <p className="text-xs text-orange-400 font-medium mb-3">Q{idx + 1}. {qa.question}</p>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                                <div className="bg-neutral-800/50 rounded-lg p-3 border border-white/5">
+                                                                    <p className="text-xs text-neutral-500 mb-1.5">내 답변</p>
+                                                                    <p className="text-sm text-neutral-300">{qa.answer}</p>
+                                                                </div>
+                                                                {suggestion && (
+                                                                    <div className="bg-emerald-900/20 rounded-lg p-3 border border-emerald-500/10">
+                                                                        <p className="text-xs text-emerald-500 mb-1.5">개선된 답변</p>
+                                                                        <p className="text-sm text-neutral-200">{suggestion.suggestion}</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

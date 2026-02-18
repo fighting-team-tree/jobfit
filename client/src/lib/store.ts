@@ -242,6 +242,52 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
   clearConversation: () => set({ conversation: [], jdText: '', profileData: null }),
 }));
 
+// ============ Interview History Store ============
+
+export interface InterviewHistoryEntry {
+  id: string;
+  sessionId: string;
+  date: string;
+  interviewType: string;
+  persona: string;
+  scores: Record<string, number>;
+  totalQuestions: number;
+  durationSeconds: number;
+  companyName?: string;
+  feedbackSummary?: string;
+}
+
+interface InterviewHistoryState {
+  entries: InterviewHistoryEntry[];
+  addEntry: (entry: InterviewHistoryEntry) => void;
+  getEntries: () => InterviewHistoryEntry[];
+  clearHistory: () => void;
+}
+
+export const useInterviewHistoryStore = create<InterviewHistoryState>()(
+  persist(
+    (set, get) => ({
+      entries: [],
+
+      addEntry: (entry) =>
+        set((state) => {
+          // 중복 방지: 같은 sessionId가 이미 있으면 추가하지 않음
+          if (state.entries.some((e) => e.sessionId === entry.sessionId)) {
+            return state;
+          }
+          return { entries: [entry, ...state.entries].slice(0, 50) }; // 최대 50개 보관
+        }),
+
+      getEntries: () => get().entries,
+
+      clearHistory: () => set({ entries: [] }),
+    }),
+    {
+      name: 'jobfit-interview-history',
+    }
+  )
+);
+
 // ============ Problem Store ============
 
 interface ProblemState {

@@ -56,6 +56,8 @@ class InterviewFeedbackResponse(BaseModel):
     strengths: list[str] = []
     improvements: list[str] = []
     sample_answers: list[dict] = []
+    star_analysis: list[dict] = []
+    time_analysis: dict = {}
 
 
 class InterviewAnswerRequest(BaseModel):
@@ -74,6 +76,50 @@ class EndSessionRequest(BaseModel):
 # ============ In-memory session storage ============
 # In production, use Redis or database
 active_sessions: dict[str, InterviewSession] = {}
+
+
+def _compute_time_analysis(conversation: list[dict]) -> dict:
+    """Compute per-question response times from conversation timestamps."""
+    qa_pairs: list[dict] = []
+    response_times: list[float] = []
+
+    i = 0
+    while i < len(conversation) - 1:
+        msg = conversation[i]
+        next_msg = conversation[i + 1]
+
+        if msg.get("role") == "interviewer" and next_msg.get("role") == "candidate":
+            q_ts = msg.get("timestamp")
+            a_ts = next_msg.get("timestamp")
+            elapsed = None
+            if q_ts and a_ts:
+                try:
+                    q_time = datetime.fromisoformat(q_ts.replace("Z", "+00:00"))
+                    a_time = datetime.fromisoformat(a_ts.replace("Z", "+00:00"))
+                    elapsed = max(0, (a_time - q_time).total_seconds())
+                    response_times.append(elapsed)
+                except (ValueError, TypeError):
+                    pass
+
+            qa_pairs.append({
+                "question": msg.get("content", "")[:100],
+                "response_seconds": round(elapsed, 1) if elapsed is not None else None,
+            })
+            i += 2
+        else:
+            i += 1
+
+    avg_time = round(sum(response_times) / len(response_times), 1) if response_times else 0
+    max_time = round(max(response_times), 1) if response_times else 0
+    min_time = round(min(response_times), 1) if response_times else 0
+
+    return {
+        "per_question": qa_pairs,
+        "avg_response_seconds": avg_time,
+        "max_response_seconds": max_time,
+        "min_response_seconds": min_time,
+        "total_pairs": len(qa_pairs),
+    }
 
 
 # ============ REST Endpoints ============
@@ -264,6 +310,26 @@ async def get_interview_feedback(session_id: str):
                     "suggestion": "REST vs GraphQL 선택에서 의견이 갈렸을 때, 두 방식으로 프로토타입을 만들고 응답 시간과 개발 생산성을 비교 측정했습니다. 결과적으로 우리 서비스 특성에 맞는 REST를 선택했고, 이 과정을 통해 팀의 의사결정 프로세스도 개선되었습니다.",
                 },
             ],
+            "star_analysis": [
+                {
+                    "question": "FastAPI를 사용한 프로젝트에서 가장 어려웠던 기술적 문제가 있었나요?",
+                    "answer_summary": "WebSocket 기반 실시간 처리 시 메모리 누수 문제를 asyncio와 connection pool 최적화로 해결",
+                    "situation": True,
+                    "task": True,
+                    "action": True,
+                    "result": False,
+                    "feedback": "Result 요소가 부족합니다. 메모리 사용량 감소율이나 처리 성능 개선 수치를 구체적으로 언급하면 더 설득력 있는 답변이 됩니다.",
+                },
+                {
+                    "question": "팀에서 기술적 의견 충돌이 있었을 때 어떻게 해결하셨나요?",
+                    "answer_summary": "데이터 기반 의사결정을 제안하여 벤치마크 테스트로 최적 방안 선택",
+                    "situation": True,
+                    "task": False,
+                    "action": True,
+                    "result": True,
+                    "feedback": "Task 요소가 부족합니다. 팀에서 본인의 역할(예: 기술 리드, 제안자)을 명확히 하면 좋겠습니다.",
+                },
+            ],
         }
     else:
         # LLM 기반 피드백 생성 (폴백 포함)
@@ -278,6 +344,9 @@ async def get_interview_feedback(session_id: str):
             print(f"[Interview] LLM feedback generation failed: {e}")
             llm_feedback = llm_service._default_interview_feedback()
 
+    # 답변 시간 분석: Q&A 쌍의 timestamp 기반
+    time_analysis = _compute_time_analysis(session.conversation_history)
+
     return InterviewFeedbackResponse(
         session_id=session_id,
         total_questions=session.question_count,
@@ -288,6 +357,8 @@ async def get_interview_feedback(session_id: str):
         strengths=llm_feedback.get("strengths", []),
         improvements=llm_feedback.get("improvements", []),
         sample_answers=llm_feedback.get("sample_answers", []),
+        star_analysis=llm_feedback.get("star_analysis", []),
+        time_analysis=time_analysis,
     )
 
 

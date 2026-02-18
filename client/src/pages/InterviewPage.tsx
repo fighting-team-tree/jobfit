@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings, Clock, MessageSquare, User, FileText, ChevronDown, X, FlaskConical, Plus, Target } from 'lucide-react';
+import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings, Clock, MessageSquare, User, FileText, ChevronDown, X, FlaskConical, Plus, Target, Building2, CheckSquare, Square, History, Zap } from 'lucide-react';
 import { useConversation } from '@elevenlabs/react';
 import { analysisAPI, interviewAPI } from '../lib/api';
 import { useProfileStore, useInterviewStore } from '../lib/store';
@@ -80,6 +80,102 @@ const INTERVIEW_TYPES: { value: InterviewType; label: string; description: strin
     { value: 'behavioral', label: '행동 면접', description: '경험, 협업, 상황 대처 중심' },
 ];
 
+// ============ 기업 프리셋 ============
+
+interface CompanyPreset {
+    name: string;
+    style: string; // 시스템 프롬프트에 주입할 기업별 면접 스타일
+    description: string; // 사용자에게 보여줄 한 줄 요약
+    traits: string[]; // 면접 특성 태그
+    sources: string[]; // 근거 출처
+}
+
+const COMPANY_PRESETS: CompanyPreset[] = [
+    {
+        name: '일반',
+        style: '',
+        description: '',
+        traits: [],
+        sources: [],
+    },
+    {
+        name: '네이버',
+        style: '네이버 면접 스타일: 기술 깊이 중시, 대규모 트래픽 처리 경험, 검색/추천 알고리즘 이해도를 중점적으로 평가합니다. 코딩 테스트 결과를 바탕으로 심화 질문을 합니다.',
+        description: '코딩 테스트 → 기술 면접 → 임원 면접 순서로 진행. 기술 깊이와 대규모 시스템 경험을 중점 평가.',
+        traits: ['기술 깊이 중심', '대규모 트래픽', '코테 기반 심화질문'],
+        sources: [
+            '네이버 채용 공식 사이트 면접 프로세스 안내',
+            '잡플래닛/블라인드 네이버 면접 후기 종합',
+            'NAVER D2 기술 블로그 엔지니어링 문화',
+        ],
+    },
+    {
+        name: '카카오',
+        style: '카카오 면접 스타일: 서비스 지향적 사고, 사용자 경험 개선 사례, 대용량 메시징 시스템 설계 경험을 중점적으로 평가합니다. 카카오의 "같이의 가치"에 부합하는 협업 경험을 물어봅니다.',
+        description: '코딩 테스트 → 1차 기술 → 2차 컬쳐핏 순서. 서비스 중심 사고와 "같이의 가치" 부합 여부를 평가.',
+        traits: ['서비스 지향 사고', '같이의 가치', 'UX 개선 사례'],
+        sources: [
+            '카카오 공식 채용 페이지 면접 안내',
+            '카카오 기술 블로그 채용 프로세스 소개',
+            '잡플래닛/블라인드 카카오 면접 후기 종합',
+        ],
+    },
+    {
+        name: '삼성전자',
+        style: '삼성전자 면접 스타일: 체계적이고 구조화된 답변을 중시합니다. GSAT/역량검사 이후의 직무 면접으로, 전공 지식 깊이와 프로젝트 경험을 꼼꼼히 확인합니다. 임원 면접에서는 인성과 조직 적합성을 봅니다.',
+        description: 'GSAT → 직무 면접 → 임원 면접 순서. 구조화된 답변, 전공 깊이, 조직 적합성을 종합 평가.',
+        traits: ['구조화된 답변', '전공 지식 깊이', '인성/조직 적합성'],
+        sources: [
+            '삼성 채용 공식 사이트 전형 절차',
+            '삼성전자 DS/DX 부문 면접 체험 수기',
+            '잡플래닛/블라인드 삼성전자 면접 후기 종합',
+        ],
+    },
+    {
+        name: 'LG CNS',
+        style: 'LG CNS 면접 스타일: DX(디지털 전환) 역량과 클라우드/AI 프로젝트 경험을 중시합니다. 고객사 대면 경험과 컨설팅 역량도 평가합니다.',
+        description: 'DX 사업 중심 기업으로, 클라우드/AI 프로젝트 경험과 고객 대면 컨설팅 역량을 함께 평가.',
+        traits: ['DX 역량', '클라우드/AI', '컨설팅 역량'],
+        sources: [
+            'LG CNS 채용 공식 사이트',
+            'LG CNS 기술 블로그 DX 사례',
+            '잡플래닛/블라인드 LG CNS 면접 후기 종합',
+        ],
+    },
+    {
+        name: '쿠팡',
+        style: '쿠팡 면접 스타일: 아마존 LP(Leadership Principles)와 유사한 리더십 원칙을 기반으로 평가합니다. 시스템 설계, 알고리즘 문제 해결력, "Customer Obsession" 사례를 중심으로 질문합니다.',
+        description: '아마존 LP 기반 리더십 원칙으로 평가. 시스템 설계 + 알고리즘 + Customer Obsession 중심.',
+        traits: ['리더십 원칙(LP)', '시스템 설계', 'Customer Obsession'],
+        sources: [
+            '쿠팡 공식 채용 페이지 면접 프로세스',
+            '쿠팡 엔지니어링 블로그',
+            'Amazon LP 기반 면접 프레임워크 (공개 자료)',
+        ],
+    },
+    {
+        name: '토스',
+        style: '토스 면접 스타일: 빠른 실행력과 임팩트를 중시합니다. "왜 이 문제를 풀어야 하는지"에 대한 본인의 관점, 데이터 기반 의사결정 경험, 핀테크 도메인 이해도를 평가합니다.',
+        description: '"왜 이 문제를 풀어야 하는지" 본인의 관점을 중시. 실행력, 임팩트, 데이터 기반 의사결정 평가.',
+        traits: ['임팩트 중심', '데이터 기반 의사결정', '문제 정의 능력'],
+        sources: [
+            '토스 채용 페이지 "이런 분과 함께하고 싶어요"',
+            '토스 기술 블로그 (toss.tech) 채용 문화',
+            '잡플래닛/블라인드 토스 면접 후기 종합',
+        ],
+    },
+];
+
+// ============ 준비 체크리스트 ============
+
+const DEFAULT_CHECKLIST = [
+    { id: 'intro', label: '자기소개 준비 (1분 버전)', checked: false },
+    { id: 'star', label: 'STAR 기법 복습 (Situation-Task-Action-Result)', checked: false },
+    { id: 'projects', label: '주요 프로젝트 경험 정리', checked: false },
+    { id: 'motivation', label: '지원 동기 정리', checked: false },
+    { id: 'questions', label: '역질문 2-3개 준비', checked: false },
+];
+
 // ============ 메인 컴포넌트 ============
 
 export default function InterviewPage() {
@@ -107,6 +203,10 @@ export default function InterviewPage() {
     const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
     const [customTopic, setCustomTopic] = useState('');
     const [customTopics, setCustomTopics] = useState<string[]>([]);
+    // 기업 맞춤 면접
+    const [selectedCompany, setSelectedCompany] = useState<string>('일반');
+    // 준비 체크리스트
+    const [checklist, setChecklist] = useState(DEFAULT_CHECKLIST.map(item => ({ ...item })));
     // [신규] 면접 전 미리보기 확인 단계
     const [showPreview, setShowPreview] = useState(false);
     // [신규] 종료 확인 모달
@@ -126,7 +226,7 @@ export default function InterviewPage() {
     const questionCount = chatHistory.filter(m => m.role === 'interviewer').length;
 
     // 프로필에서 주제 후보 추출
-    const availableTopics = effectiveProfile ? extractTopicsFromProfile(effectiveProfile) : [];
+    const availableTopics = effectiveProfile ? extractTopicsFromProfile(effectiveProfile as Record<string, unknown>) : [];
 
     const toggleTopic = (label: string) => {
         setSelectedTopics(prev => {
@@ -135,6 +235,12 @@ export default function InterviewPage() {
             else next.add(label);
             return next;
         });
+    };
+
+    const toggleChecklist = (id: string) => {
+        setChecklist(prev => prev.map(item =>
+            item.id === id ? { ...item, checked: !item.checked } : item
+        ));
     };
 
     const addCustomTopic = () => {
@@ -260,7 +366,7 @@ export default function InterviewPage() {
 
             // 프로필/JD를 동적 변수로 주입
             const profileSummary = effectiveProfile
-                ? formatProfileForAgent(effectiveProfile)
+                ? formatProfileForAgent(effectiveProfile as Record<string, unknown>)
                 : '프로필 정보 없음';
             const jdSummary = jdText || '채용공고 정보 없음';
 
@@ -280,6 +386,12 @@ export default function InterviewPage() {
             const allSelectedTopics = [...selectedTopics];
             const focusSection = allSelectedTopics.length > 0
                 ? `\n\n## 집중 질문 주제 (지원자 선택)\n다음 주제를 반드시 1개 이상 질문에 포함하세요. 지원자가 직접 선택한 주제이므로 프로필 내용을 깊이 파고드세요:\n${allSelectedTopics.map(t => `- ${t}`).join('\n')}`
+                : '';
+
+            // 기업 맞춤 면접 스타일
+            const companyPreset = COMPANY_PRESETS.find(c => c.name === selectedCompany);
+            const companySection = companyPreset?.style
+                ? `\n\n## 기업 면접 스타일 (${selectedCompany})\n${companyPreset.style}`
                 : '';
 
             // 시스템 프롬프트를 코드에서 직접 override
@@ -305,6 +417,7 @@ ${profileSummary}
 ## Job Description
 ${jdSummary}
 ${focusSection}
+${companySection}
 
 ## Priority Rules
 - ALWAYS base your questions on the candidate's profile above. Reference their specific skills, projects, and experience.
@@ -319,7 +432,17 @@ ${focusSection}
 - If answer is vague: "조금 더 구체적으로 설명해주실 수 있을까요?"
 - Do NOT reveal evaluation during the interview.
 - After 5 questions: "오늘 면접은 여기까지입니다. 수고하셨습니다."
-- Keep speaking turns short — this is a voice conversation.`;
+- Keep speaking turns short — this is a voice conversation.
+
+## Follow-up Question Rules (꼬리 질문)
+- If the candidate's answer is vague or abstract, ask a concrete follow-up question.
+- If STAR elements are missing (Situation, Task, Action, Result), guide the candidate to provide them.
+- Example: "그 과정에서 본인의 구체적인 역할은 무엇이었나요?" or "결과적으로 어떤 성과가 있었나요?"
+
+## Adaptive Difficulty (적응형 난이도)
+- If the candidate gives detailed, technically deep answers → ask harder, more advanced questions.
+- If the candidate gives short or generic answers → ask simpler, more open-ended questions to help them elaborate.
+- Naturally adjust difficulty without explicitly mentioning it.`;
 
             // overrides로 시스템 프롬프트 + 첫 메시지 주입
             startOptions.overrides = {
@@ -360,7 +483,7 @@ ${focusSection}
 
                 const result = await interviewAPI.endSession(
                     serverConversation,
-                    effectiveProfile || {},
+                    (effectiveProfile as Record<string, unknown>) || {},
                     jdText,
                     persona,
                 );
@@ -399,7 +522,7 @@ ${focusSection}
 
             const result = await interviewAPI.endSession(
                 mockConversation,
-                effectiveProfile || {},
+                (effectiveProfile as Record<string, unknown>) || {},
                 jdText || '백엔드 개발자 채용. 자격요건: Python, FastAPI, PostgreSQL, Docker. 우대사항: React, TypeScript, AWS.',
                 persona,
             );
@@ -470,6 +593,10 @@ ${focusSection}
                                 <div className="w-px h-4 bg-white/10" />
                             </div>
                         )}
+                        <Link to="/interview/history" className="text-neutral-400 hover:text-white flex items-center gap-1 text-sm">
+                            <History className="w-4 h-4" />
+                            <span className="hidden sm:inline">히스토리</span>
+                        </Link>
                         <button onClick={() => setShowSettings(!showSettings)} className="text-neutral-400 hover:text-white">
                             <Settings className="w-5 h-5" />
                         </button>
@@ -530,7 +657,36 @@ ${focusSection}
                             자연스럽게 대화하고, 언제든 말을 끊을 수 있습니다.
                         </p>
 
-                        {/* [신규] 면접 유형 선택 */}
+                        {/* 준비 체크리스트 */}
+                        <div className="mb-8 max-w-md mx-auto text-left">
+                            <p className="text-sm text-neutral-400 mb-3 flex items-center gap-2">
+                                <CheckSquare className="w-4 h-4" />
+                                면접 준비 체크리스트
+                            </p>
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2">
+                                {checklist.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => toggleChecklist(item.id)}
+                                        className="w-full flex items-center gap-3 text-left py-1.5 hover:bg-white/5 rounded-lg px-2 transition-colors"
+                                    >
+                                        {item.checked ? (
+                                            <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        ) : (
+                                            <Square className="w-4 h-4 text-neutral-600 shrink-0" />
+                                        )}
+                                        <span className={`text-sm ${item.checked ? 'text-neutral-400 line-through' : 'text-neutral-200'}`}>
+                                            {item.label}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-neutral-600 mt-2">
+                                {checklist.filter(c => c.checked).length}/{checklist.length}개 완료
+                            </p>
+                        </div>
+
+                        {/* 면접 유형 + 기업 선택 */}
                         <div className="mb-8 max-w-md mx-auto">
                             <p className="text-sm text-neutral-400 mb-3">면접 유형</p>
                             <div className="grid grid-cols-3 gap-2">
@@ -549,6 +705,57 @@ ${focusSection}
                                     </button>
                                 ))}
                             </div>
+                        </div>
+
+                        {/* 기업 맞춤 면접 */}
+                        <div className="mb-8 max-w-md mx-auto">
+                            <p className="text-sm text-neutral-400 mb-3 flex items-center gap-2">
+                                <Building2 className="w-4 h-4" />
+                                기업 맞춤 면접 <span className="text-neutral-600">(선택사항)</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {COMPANY_PRESETS.map((company) => (
+                                    <button
+                                        key={company.name}
+                                        onClick={() => setSelectedCompany(company.name)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${
+                                            selectedCompany === company.name
+                                                ? 'border-blue-500 bg-blue-500/10 text-white ring-1 ring-blue-500/30'
+                                                : 'border-white/10 bg-white/5 text-neutral-500 hover:text-neutral-300 hover:border-white/20'
+                                        }`}
+                                    >
+                                        {company.name}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* 선택된 기업 근거 카드 */}
+                            {selectedCompany !== '일반' && (() => {
+                                const preset = COMPANY_PRESETS.find(c => c.name === selectedCompany);
+                                if (!preset) return null;
+                                return (
+                                    <div className="mt-3 bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-left">
+                                        <p className="text-sm text-neutral-200 mb-3">{preset.description}</p>
+                                        <div className="flex flex-wrap gap-1.5 mb-3">
+                                            {preset.traits.map((trait) => (
+                                                <span key={trait} className="px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                                                    {trait}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="border-t border-white/5 pt-3">
+                                            <p className="text-[11px] text-neutral-500 mb-1.5">참고 근거</p>
+                                            <ul className="space-y-0.5">
+                                                {preset.sources.map((source, i) => (
+                                                    <li key={i} className="text-[11px] text-neutral-600 flex items-start gap-1.5">
+                                                        <span className="text-neutral-700 mt-0.5 shrink-0">{i + 1}.</span>
+                                                        {source}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* 집중 질문 주제 선택 */}
@@ -685,10 +892,22 @@ ${focusSection}
                             <div className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 ${conversation.isSpeaking ? 'bg-violet-500 shadow-[0_0_80px_rgba(139,92,246,0.6)] scale-110' : 'bg-neutral-800'}`}>
                                 <Volume2 className={`w-20 h-20 text-white ${conversation.isSpeaking ? 'animate-bounce' : ''}`} />
                             </div>
-                            <div className="mt-8">
+                            <div className="mt-8 flex flex-col items-center gap-2">
                                 <span className={`px-3 py-1 rounded-full text-sm ${conversation.isSpeaking ? 'bg-violet-500/20 text-violet-300' : 'bg-neutral-800 text-neutral-400'}`}>
                                     {conversation.isSpeaking ? 'AI가 말하는 중...' : '듣고 있음...'}
                                 </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                                        <Zap className="w-3 h-3" />
+                                        적응형 난이도
+                                    </span>
+                                    {selectedCompany !== '일반' && (
+                                        <span className="px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                                            <Building2 className="w-3 h-3" />
+                                            {selectedCompany}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             <button
@@ -803,6 +1022,28 @@ ${focusSection}
                                     )}
                                 </div>
                             </div>
+                            {/* 기업 맞춤 */}
+                            {selectedCompany !== '일반' && (() => {
+                                const preset = COMPANY_PRESETS.find(c => c.name === selectedCompany);
+                                if (!preset) return null;
+                                return (
+                                    <div>
+                                        <div className="flex items-center gap-2 text-sm text-neutral-400 mb-2">
+                                            <Building2 className="w-4 h-4" />
+                                            <span>기업 면접 스타일</span>
+                                        </div>
+                                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3">
+                                            <p className="text-sm text-blue-300 font-medium mb-1">{preset.name}</p>
+                                            <p className="text-xs text-neutral-300 mb-2">{preset.description}</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {preset.traits.map((t) => (
+                                                    <span key={t} className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">{t}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                             {/* 선택된 집중 주제 */}
                             {selectedTopics.size > 0 && (
                                 <div>
