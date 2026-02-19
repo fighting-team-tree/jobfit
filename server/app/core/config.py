@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://0.0.0.0:5173",
         "https://*.replit.dev",
+        "https://*.replit.app",
         "https://*.repl.co",
     ]
 
