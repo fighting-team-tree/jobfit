@@ -162,8 +162,8 @@ JSON만 응답하세요."""
             "strengths": feedback.get("strengths", []),
             "areas_to_improve": feedback.get("areas_to_improve", []),
             "jd_analysis": {
-                "required_skills": extraction["required_skills"],
-                "preferred_skills": extraction["preferred_skills"],
+                "required_skills": required_skills,
+                "preferred_skills": preferred_skills,
             },
             "profile_skills": match_result.profile_skills,
             "matching_required": match_result.matching_required,

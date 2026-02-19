@@ -78,7 +78,12 @@ class EmbeddingService:
         )
 
         # Sort by index to maintain order (Gemini may return index=None)
-        data = sorted(response.data, key=lambda x: x.index if x.index is not None else 0)
+        # enumerate 기반 폴백: index=None이면 원래 순서(i) 사용
+        data = sorted(
+            enumerate(response.data),
+            key=lambda pair: pair[1].index if pair[1].index is not None else pair[0],
+        )
+        data = [item for _, item in data]
         return [np.array(d.embedding) for d in data]
 
     def cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
