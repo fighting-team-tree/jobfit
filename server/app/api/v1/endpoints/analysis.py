@@ -11,7 +11,7 @@ from app.services.jd_scraper_service import jd_scraper_service
 from app.services.llm_service import llm_service
 from app.services.resume_parser_service import resume_parser_service
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 router = APIRouter()
 
@@ -62,6 +62,13 @@ class ProfileExperience(BaseModel):
     role: str | None = None
     duration: str | None = None
     description: str | None = None
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def coerce_description(cls, v: object) -> str | None:
+        if isinstance(v, list):
+            return "\n".join(str(item) for item in v)
+        return v
 
 
 class ProfileEducation(BaseModel):
