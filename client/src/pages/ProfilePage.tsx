@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw, Users } from 'lucide-react';
+import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw, Users, AlertCircle } from 'lucide-react';
 import { analysisAPI } from '../lib/api';
 import type { FixtureProfile } from '../lib/api';
 import { useProfileStore } from '../lib/store';
@@ -173,8 +173,9 @@ export default function ProfilePage() {
     };
 
     const structured = resumeFileResult?.structured;
+    const hasStructuredParseError = Boolean(resumeFileResult?.success && resumeFileResult?.structured_parse_error);
     const hasAnyAnalysis = Boolean(resumeFileResult?.success || githubAnalysis);
-    const resumeCompleted = Boolean(resumeFileResult?.success);
+    const resumeCompleted = Boolean(resumeFileResult?.success && !hasStructuredParseError);
 
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-100">
@@ -464,6 +465,45 @@ export default function ProfilePage() {
                             )}
                         </div>
                     </div>
+
+                    {/* 구조화 파싱 실패 시 에러 + 마크다운 폴백 */}
+                    {hasStructuredParseError && resumeFileResult && (
+                        <div className="mt-8 p-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/5">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <AlertCircle className="w-6 h-6 text-yellow-400" />
+                                    <div>
+                                        <h2 className="text-lg font-semibold">이력서 파싱 부분 실패</h2>
+                                        <p className="text-sm text-neutral-400">
+                                            파일은 읽었으나 구조화 변환에 실패했습니다. 다시 시도해주세요.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleAnalyzeResume}
+                                    disabled={isAnalyzingResume}
+                                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-neutral-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                                >
+                                    {isAnalyzingResume ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <RotateCcw className="w-4 h-4" />
+                                    )}
+                                    재시도
+                                </button>
+                            </div>
+                            {resumeFileResult.markdown && (
+                                <details className="mt-4">
+                                    <summary className="text-sm text-neutral-400 cursor-pointer hover:text-neutral-200">
+                                        추출된 원본 텍스트 보기
+                                    </summary>
+                                    <pre className="mt-2 p-4 bg-neutral-900 rounded-xl text-xs text-neutral-300 overflow-auto max-h-64 whitespace-pre-wrap">
+                                        {resumeFileResult.markdown}
+                                    </pre>
+                                </details>
+                            )}
+                        </div>
+                    )}
 
                     {resumeFileResult?.success && structured && (
                         <div className="mt-8 p-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/5">

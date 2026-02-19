@@ -368,14 +368,18 @@ async def analyze_resume_file(file: UploadFile = File(...), extract_structured: 
         structured_parse_error = bool(structured_data and structured_data.get("parse_error"))
         structured_profile = None
         if structured_data and not structured_parse_error:
-            structured_profile = ProfileStructured(**structured_data)
+            try:
+                structured_profile = ProfileStructured(**structured_data)
+            except Exception:
+                # Pydantic 검증 실패 시 parse_error 처리
+                structured_parse_error = True
 
         return ResumeFileResponse(
             markdown=parse_result["markdown"],
             structured=structured_profile,
             pages=parse_result["pages"],
             success=True,
-            error=None,
+            error="구조화 파싱에 실패했습니다. 마크다운 원본을 확인해주세요." if structured_parse_error else None,
             structured_parse_error=structured_parse_error,
         )
 

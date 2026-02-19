@@ -176,9 +176,41 @@ class ResumeParserService:
         except Exception as e:
             return {"markdown": "", "pages": 0, "success": False, "error": str(e)}
 
-    async def parse_to_structured_json(self, markdown_content: str) -> dict:
+    def _extract_json_from_text(self, text: str) -> dict | None:
+        """LLM 응답 텍스트에서 JSON을 추출. Gemini/OpenAI 모두 대응."""
+        if not text:
+            return None
+
+        # 1) ```json ... ``` 코드 블록에서 추출
+        json_block_match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
+        if json_block_match:
+            try:
+                return json.loads(json_block_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 2) 전체 텍스트를 바로 JSON 파싱 시도
+        try:
+            return json.loads(text.strip())
+        except json.JSONDecodeError:
+            pass
+
+        # 3) 텍스트 내 첫 번째 { ... } 블록 추출 (Gemini가 앞뒤 설명을 붙이는 경우)
+        brace_match = re.search(r"\{.*\}", text, re.DOTALL)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        return None
+
+    async def parse_to_structured_json(
+        self, markdown_content: str, max_retries: int = 2
+    ) -> dict:
         """
         Convert parsed markdown to structured JSON using LLM.
+        Gemini 모델 호환을 위해 JSON 추출 로직 강화 및 재시도 지원.
 
         Returns:
             {
@@ -207,36 +239,38 @@ class ResumeParserService:
     "awards": ["수상 경력"]
 }}
 
-JSON만 응답하세요."""
+반드시 JSON만 응답하세요. 코드 블록이나 설명 없이 순수 JSON만 출력하세요."""
 
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.text_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a resume parsing assistant. Always respond with valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.1,
-                max_tokens=3000,
-            )
-
-            content = response.choices[0].message.content
-
+        last_error = None
+        for attempt in range(max_retries):
             try:
-                # Clean up potential markdown code blocks
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0]
-                elif "```" in content:
-                    content = content.split("```")[1].split("```")[0]
-                return json.loads(content.strip())
-            except json.JSONDecodeError:
-                return {"raw_text": content, "parse_error": True}
+                response = await self.client.chat.completions.create(
+                    model=self.text_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a resume parsing assistant. Always respond with valid JSON only. No markdown code blocks, no explanations.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=3000,
+                )
 
-        except Exception as e:
-            return {"parse_error": True, "error": str(e)}
+                content = response.choices[0].message.content
+                if not content:
+                    last_error = "LLM returned empty response"
+                    continue
+
+                parsed = self._extract_json_from_text(content)
+                if parsed and not parsed.get("parse_error"):
+                    return parsed
+
+                last_error = f"JSON extraction failed from response: {content[:200]}"
+            except Exception as e:
+                last_error = str(e)
+
+        return {"parse_error": True, "error": last_error or "Unknown error"}
 
 
 # Singleton instance
