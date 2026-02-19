@@ -1,7 +1,7 @@
 {pkgs}: {
   deps = [
-    pkgs.python311
-    pkgs.python311Packages.pip
+    pkgs.python312
+    pkgs.python312Packages.pip
     pkgs.ffmpeg
     pkgs.portaudio
     pkgs.pkg-config

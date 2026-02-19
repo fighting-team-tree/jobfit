@@ -1,4 +1,4 @@
-modules = ["python-3.11", "nodejs-20"]
+modules = ["python-3.12", "nodejs-20"]
 run = "bash start.sh"
 entrypoint = "server/main.py"
 
