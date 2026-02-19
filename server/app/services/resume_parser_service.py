@@ -47,8 +47,8 @@ class ResumeParserService:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.vision_model = settings.LLM_MODEL or "gemini-2.0-flash"
-            self.text_model = settings.LLM_MODEL or "gemini-2.0-flash"
+            self.vision_model = settings.LLM_MODEL or "gemini-2.5-flash"
+            self.text_model = settings.LLM_MODEL or "gemini-2.5-flash"
         else:  # openai
             self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
             self.vision_model = settings.LLM_MODEL or "gpt-4o-mini"

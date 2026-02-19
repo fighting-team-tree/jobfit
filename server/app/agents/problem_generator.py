@@ -56,7 +56,7 @@ class ProblemGenerator:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.model = settings.LLM_MODEL or "gemini-2.0-flash"
+            self.model = settings.LLM_MODEL or "gemini-2.5-flash"
         else:  # openai
             if not settings.OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
