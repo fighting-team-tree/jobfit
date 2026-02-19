@@ -7,7 +7,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useProfileStore } from './store';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 // Development mode flag
 const DEV_MODE = import.meta.env.DEV;
