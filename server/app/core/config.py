@@ -11,14 +11,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "JobFit"
     API_V1_STR: str = "/api/v1"
 
-    # CORS - includes Replit domains
+    # CORS - exact origins (wildcard patterns don't work in FastAPI CORSMiddleware)
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://0.0.0.0:5173",
-        "https://*.replit.dev",
-        "https://*.replit.app",
-        "https://*.repl.co",
     ]
+    # Regex for dynamic Replit subdomains
+    CORS_ORIGIN_REGEX: str = r"https://.*\.(replit\.dev|replit\.app|repl\.co)"
 
     # Provider 선택: "gemini" | "openai"
     LLM_PROVIDER: str = "gemini"

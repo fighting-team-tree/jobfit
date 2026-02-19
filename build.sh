@@ -15,4 +15,9 @@ cd server
 uv sync
 cd ..
 
+echo "🌐 Playwright 브라우저 설치 중..."
+cd server
+uv run playwright install chromium
+cd ..
+
 echo "✅ 빌드 완료"
