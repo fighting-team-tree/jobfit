@@ -7,6 +7,7 @@ Replaces nvidia_service.py for all LLM calls.
 """
 
 import json
+import re
 
 from openai import AsyncOpenAI
 
@@ -42,7 +43,8 @@ class LLMService:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return content or ""
 
     async def _call_llm_json(
         self,
@@ -64,15 +66,33 @@ class LLMService:
 
     @staticmethod
     def _parse_json(content: str) -> dict:
-        """LLM 응답에서 JSON 추출."""
+        """LLM 응답에서 JSON 추출. Gemini/OpenAI 모두 대응."""
+        if not content:
+            return {"error": True, "raw": ""}
+
+        # 1) ```json ... ``` 코드 블록에서 추출
+        json_block_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content, re.DOTALL)
+        if json_block_match:
+            try:
+                return json.loads(json_block_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 2) 전체 텍스트를 바로 JSON 파싱 시도
         try:
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0]
             return json.loads(content.strip())
         except json.JSONDecodeError:
-            return {"error": True, "raw": content}
+            pass
+
+        # 3) 텍스트 내 첫 번째 { ... } 블록 추출
+        brace_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if brace_match:
+            try:
+                return json.loads(brace_match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        return {"error": True, "raw": content}
 
     # ===== nvidia_service.py 1:1 대체 메서드들 =====
 
@@ -115,12 +135,21 @@ JSON만 응답하세요."""
         if extraction.get("error"):
             return {"error": "Failed to extract skills", "raw": extraction}
 
+        # 키 누락 방어: Gemini가 다른 키명을 사용할 수 있음
+        profile_skills = extraction.get("profile_skills", [])
+        required_skills = extraction.get("required_skills", [])
+        preferred_skills = extraction.get("preferred_skills", [])
+
+        # 프로필 스킬이 비어있으면 원본 profile에서 보충
+        if not profile_skills:
+            profile_skills = profile.get("skills", [])
+
         from app.services.skill_matcher_service import skill_matcher_service
 
         match_result = await skill_matcher_service.match_skills(
-            profile_skills=extraction["profile_skills"],
-            required_skills=extraction["required_skills"],
-            preferred_skills=extraction["preferred_skills"],
+            profile_skills=profile_skills,
+            required_skills=required_skills,
+            preferred_skills=preferred_skills,
         )
 
         feedback = await self._generate_feedback(match_result, profile, jd_text)
