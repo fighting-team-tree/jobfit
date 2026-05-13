@@ -10,8 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-from anthropic import Anthropic
-from app.core.config import settings
+from app.services.llm_service import llm_service
 
 # ============ Data Classes ============
 
@@ -72,12 +71,8 @@ class RoadmapAgent:
     """
 
     def __init__(self):
-        """Initialize the agent with Claude client."""
-        if not settings.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY is required")
-
-        self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.model = "claude-sonnet-4-20250514"
+        """Initialize the agent with unified LLM service."""
+        self.llm = llm_service
 
     async def generate_roadmap(
         self,
@@ -129,17 +124,10 @@ Guidelines:
 Return ONLY the JSON."""
 
         try:
-            response = self.client.messages.create(
-                model=self.model, max_tokens=3000, messages=[{"role": "user", "content": prompt}]
+            roadmap_data = await self.llm.call_llm_json(
+                prompt,
+                system_msg="You are a career development expert. Always respond with valid JSON only.",
             )
-
-            content = response.content[0].text.strip()
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-
-            roadmap_data = json.loads(content)
 
             # Convert to Roadmap dataclass
             weeks = []
@@ -211,17 +199,17 @@ Guidelines:
 Return ONLY the JSON array."""
 
         try:
-            response = self.client.messages.create(
-                model=self.model, max_tokens=2000, messages=[{"role": "user", "content": prompt}]
+            problems_data = await self.llm.call_llm_json(
+                prompt,
+                system_msg="You are a technical education expert. Always respond with a JSON array only.",
             )
 
-            content = response.content[0].text.strip()
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
-
-            problems_data = json.loads(content)
+            if not isinstance(problems_data, list):
+                # JSON 파싱 결과가 딕셔너리인 경우 (때때로 LLM이 래핑할 수 있음)
+                if isinstance(problems_data, dict) and "problems" in problems_data:
+                    problems_data = problems_data["problems"]
+                else:
+                    problems_data = [problems_data]
 
             problems = []
             for i, p_data in enumerate(problems_data):
@@ -273,11 +261,12 @@ Provide:
 Format your response clearly with code blocks where appropriate."""
 
         try:
-            response = self.client.messages.create(
-                model=self.model, max_tokens=2000, messages=[{"role": "user", "content": prompt}]
+            return await self.llm.call_llm(
+                messages=[
+                    {"role": "system", "content": "You are a senior developer providing solutions."},
+                    {"role": "user", "content": prompt},
+                ]
             )
-
-            return response.content[0].text.strip()
 
         except Exception as e:
             return f"Solution generation failed: {str(e)}"

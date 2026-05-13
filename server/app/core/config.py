@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Regex for dynamic Replit subdomains
     CORS_ORIGIN_REGEX: str = r"https://.*\.(replit\.dev|replit\.app|repl\.co)"
 
-    # Provider 선택: "gemini" | "openai"
+    # Provider 선택: "gemini" | "openai" | "upstage"
     LLM_PROVIDER: str = "gemini"
     TEST_MODE: bool = False
 
@@ -31,9 +31,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     GOOGLE_API_KEY: str = ""
+    UPSTAGE_API_KEY: str = ""
 
     # 모델명 override (비어있으면 provider 기본값 사용)
-    LLM_MODEL: str = ""
+    LLM_PARSE_MODEL: str = ""
+    LLM_ANALYSIS_MODEL: str = ""
     EMBEDDING_MODEL: str = ""
 
     # GitHub API

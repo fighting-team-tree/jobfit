@@ -112,3 +112,9 @@ docs/.pdca-status.json
 # Project Specific
 data/
 parsing_result.md
+
+# AI Agent Temporary Data
+.codex/edge-profile/
+.codex/edge-profile-inspect/
+.codex/screens/
+.codex/diagrams/

@@ -25,20 +25,31 @@ class LLMService:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.model = settings.LLM_MODEL or "gemini-2.5-flash"
+            self.parse_model = settings.LLM_PARSE_MODEL or "gemini-3.1-flash-lite"
+            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "gemini-3.1-flash-lite"
+        elif provider == "upstage":
+            self.client = AsyncOpenAI(
+                api_key=settings.UPSTAGE_API_KEY,
+                base_url="https://api.upstage.ai/v1",
+            )
+            self.parse_model = settings.LLM_PARSE_MODEL or "solar-pro-2"
+            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "solar-pro-3"
         else:  # openai
             self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            self.model = settings.LLM_MODEL or "gpt-4o-mini"
+            self.parse_model = settings.LLM_PARSE_MODEL or "gpt-5.5-instant"
+            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "gpt-5.5"
 
-    async def _call_llm(
+    async def call_llm(
         self,
         messages: list[dict],
+        model: str = None,
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> str:
         """공용 LLM 호출 헬퍼."""
+        target_model = model or self.analysis_model
         response = await self.client.chat.completions.create(
-            model=self.model,
+            model=target_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -46,19 +57,21 @@ class LLMService:
         content = response.choices[0].message.content
         return content or ""
 
-    async def _call_llm_json(
+    async def call_llm_json(
         self,
         prompt: str,
         system_msg: str = "You are a helpful assistant. Output valid JSON only.",
+        model: str = None,
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> dict:
         """JSON 응답 파싱 포함 헬퍼."""
-        content = await self._call_llm(
+        content = await self.call_llm(
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": prompt},
             ],
+            model=model,
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -114,9 +127,10 @@ class LLMService:
 
 JSON만 응답하세요."""
 
-        result = await self._call_llm_json(
+        result = await self.call_llm_json(
             prompt,
             system_msg="You are a resume parsing assistant. Always respond with valid JSON only.",
+            model=self.parse_model,
         )
         if result.get("error"):
             return {"raw_text": result.get("raw", ""), "parse_error": True}
@@ -215,7 +229,7 @@ JSON만 응답하세요."""
 ```
 JSON만 응답하세요."""
 
-        return await self._call_llm_json(prompt, temperature=0.0)
+        return await self._call_llm_json(prompt, model=self.parse_model, temperature=0.0)
 
     async def _generate_feedback(self, match_result, profile: dict, jd_text: str) -> dict:
         """Generate qualitative feedback based on match results."""
@@ -373,7 +387,7 @@ JSON만 응답하세요."""
 }}
 JSON만 응답하세요."""
 
-        result = await self._call_llm_json(
+        result = await self.call_llm_json(
             prompt,
             system_msg="You are an expert interview evaluator. Always respond with valid JSON only.",
             temperature=0.3,
@@ -448,6 +462,7 @@ JSON만 응답하세요."""
         result = await self._call_llm_json(
             prompt,
             system_msg="You are a technical recruiter AI that analyzes GitHub repositories to identify developer skills.",
+            model=self.parse_model,
             temperature=0.3,
             max_tokens=1000,
         )
