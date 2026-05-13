@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # Database (Replit PostgreSQL)
     DATABASE_URL: str = ""
 
+    # Auth & JWT
+    JWT_SECRET_KEY: str = "your-super-secret-jwt-key"  # in prod, use strong random key
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:5173/auth/callback/google" # Frontend URI
+
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",

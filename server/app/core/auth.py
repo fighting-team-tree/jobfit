@@ -1,58 +1,98 @@
 """
-Replit Auth Dependencies
+JWT Auth Dependencies
 
-Extracts user information from Replit Auth headers.
+Extracts and validates JWT tokens for Google OAuth.
 """
 
-from app.models.user import OptionalUser, ReplitUser
-from fastapi import HTTPException, Request, status
+from typing import Optional
+
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app.core.config import settings
+from app.models.user import AuthUser, OptionalUser
+
+security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(request: Request) -> ReplitUser:
-    """
-    Extract authenticated user from Replit headers.
-
-    Replit automatically injects these headers when user is logged in:
-    - X-Replit-User-Id
-    - X-Replit-User-Name
-    - X-Replit-User-Roles (optional)
-
-    Raises:
-        HTTPException 401 if user is not authenticated.
-    """
-    user_id = request.headers.get("X-Replit-User-Id")
-    username = request.headers.get("X-Replit-User-Name")
-
-    if not user_id or not username:
+def verify_token(token: str) -> dict:
+    """Verify JWT token and return payload."""
+    try:
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+        return payload
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please log in with Replit.",
-            headers={"WWW-Authenticate": "Replit"},
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    roles = request.headers.get("X-Replit-User-Roles")
 
-    return ReplitUser(
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> AuthUser:
+    """
+    Extract authenticated user from JWT token.
+    Raises HTTPException 401 if token is invalid or missing.
+    """
+    token = credentials.credentials
+    payload = verify_token(token)
+    
+    user_id = payload.get("sub")
+    username = payload.get("username")
+    email = payload.get("email")
+    picture = payload.get("picture")
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User ID not found in token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    return AuthUser(
         user_id=user_id,
-        username=username,
-        roles=roles,
+        username=username or "Unknown",
+        email=email,
+        picture=picture,
     )
 
 
-async def get_optional_user(request: Request) -> OptionalUser:
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
+) -> OptionalUser:
     """
-    Extract user from Replit headers if present, otherwise return unauthenticated user.
-
-    Use this for endpoints that work with or without authentication.
+    Extract user from token if present, otherwise return unauthenticated user.
     """
-    user_id = request.headers.get("X-Replit-User-Id")
-    username = request.headers.get("X-Replit-User-Name")
-
-    if user_id and username:
-        return OptionalUser(
-            user_id=user_id,
-            username=username,
-            is_authenticated=True,
-        )
-
+    if not credentials:
+        return OptionalUser(is_authenticated=False)
+        
+    try:
+        token = credentials.credentials
+        payload = verify_token(token)
+        
+        user_id = payload.get("sub")
+        username = payload.get("username")
+        email = payload.get("email")
+        
+        if user_id:
+            return OptionalUser(
+                user_id=user_id,
+                username=username,
+                email=email,
+                is_authenticated=True,
+            )
+    except HTTPException:
+        pass
+        
     return OptionalUser(is_authenticated=False)

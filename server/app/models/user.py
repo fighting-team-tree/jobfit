@@ -1,18 +1,19 @@
 """
-Replit Auth User Models
+Auth User Models
 
-Pydantic models for Replit authentication.
+Pydantic models for authentication.
 """
 
 from pydantic import BaseModel
 
 
-class ReplitUser(BaseModel):
-    """Authenticated Replit user."""
+class AuthUser(BaseModel):
+    """Authenticated user from JWT token."""
 
     user_id: str
     username: str
-    roles: str | None = None
+    email: str | None = None
+    picture: str | None = None
 
 
 class OptionalUser(BaseModel):
@@ -20,4 +21,5 @@ class OptionalUser(BaseModel):
 
     user_id: str | None = None
     username: str | None = None
+    email: str | None = None
     is_authenticated: bool = False

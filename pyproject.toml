@@ -31,6 +31,8 @@ dependencies = [
     # STT (Deepgram)
     "deepgram-sdk>=3.0.0",
     "openai>=2.21.0",
+    # Auth (JWT)
+    "pyjwt>=2.8.0",
 ]
 
 [build-system]

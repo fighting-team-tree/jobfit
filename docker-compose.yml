@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # 데이터베이스 (미래 이전 대비용)
+  db:
+    image: postgres:15-alpine
+    container_name: jobfit_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: jobfit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # 백엔드 (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: jobfit_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/jobfit
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # 프론트엔드 (React + Vite)
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: jobfit_frontend
+    ports:
+      - "5173:80" # 외부에서는 5173 포트로 접근하도록 (원래 Vite 포트 유지)
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
