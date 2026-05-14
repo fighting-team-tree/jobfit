@@ -3,7 +3,6 @@ import io
 import os
 import re
 
-import fitz  # PyMuPDF
 import httpx
 from dotenv import load_dotenv
 from PIL import Image
@@ -40,6 +39,8 @@ def encode_images(file_path: str) -> list[str]:
 
     if ext == ".pdf":
         # PDF 파일 처리 (모든 페이지 추출)
+        import fitz  # PyMuPDF
+
         doc = fitz.open(file_path)
         for page in doc:
             pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 고해상도 (2x)
@@ -61,7 +62,7 @@ def encode_images(file_path: str) -> list[str]:
     return base64_images
 
 
-async def test_nvidia_vision_parse(image_path: str):
+async def nvidia_vision_parse(image_path: str):
     """
     NVIDIA NIM API를 사용하여 이력서를 파싱합니다.
     (Nemotron-Parse 1.1 모델 사용)
@@ -145,4 +146,15 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python tests/test_nvidia_parse.py <image_path>")
     else:
-        asyncio.run(test_nvidia_vision_parse(sys.argv[1]))
+        asyncio.run(nvidia_vision_parse(sys.argv[1]))
+
+
+def test_mask_pii_redacts_email_and_phone():
+    text = "홍길동 이메일 hong@example.com, 전화 010-1234-5678"
+
+    masked = mask_pii(text)
+
+    assert "hong@example.com" not in masked
+    assert "010-1234-5678" not in masked
+    assert "[EMAIL_REDACTED]" in masked
+    assert "[PHONE_REDACTED]" in masked

@@ -195,8 +195,7 @@ def get_fixtures():
     profiles = get_fixture_profiles()
     return {
         "profiles": [
-            {"name": p.get("name", ""), "skills_count": len(p.get("skills", []))}
-            for p in profiles
+            {"name": p.get("name", ""), "skills_count": len(p.get("skills", []))} for p in profiles
         ],
         "test_mode": True,
     }
@@ -215,10 +214,7 @@ def get_fixture_jds():
 
     jds = _get_fixture_jds()
     return {
-        "jds": [
-            {"title": jd.get("title", ""), "company": jd.get("company", "")}
-            for jd in jds
-        ],
+        "jds": [{"title": jd.get("title", ""), "company": jd.get("company", "")} for jd in jds],
         "test_mode": True,
     }
 
@@ -379,7 +375,9 @@ async def analyze_resume_file(file: UploadFile = File(...), extract_structured: 
             structured=structured_profile,
             pages=parse_result["pages"],
             success=True,
-            error="구조화 파싱에 실패했습니다. 마크다운 원본을 확인해주세요." if structured_parse_error else None,
+            error="구조화 파싱에 실패했습니다. 마크다운 원본을 확인해주세요."
+            if structured_parse_error
+            else None,
             structured_parse_error=structured_parse_error,
         )
 

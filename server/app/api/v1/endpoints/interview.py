@@ -7,7 +7,7 @@ Handles real-time mock interview via WebSocket with ElevenLabs TTS.
 import asyncio
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.config import settings
 from app.services.elevenlabs_service import elevenlabs_service
@@ -101,10 +101,12 @@ def _compute_time_analysis(conversation: list[dict]) -> dict:
                 except (ValueError, TypeError):
                     pass
 
-            qa_pairs.append({
-                "question": msg.get("content", "")[:100],
-                "response_seconds": round(elapsed, 1) if elapsed is not None else None,
-            })
+            qa_pairs.append(
+                {
+                    "question": msg.get("content", "")[:100],
+                    "response_seconds": round(elapsed, 1) if elapsed is not None else None,
+                }
+            )
             i += 2
         else:
             i += 1
@@ -268,7 +270,7 @@ async def get_interview_feedback(session_id: str):
 
     session = active_sessions[session_id]
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    now_utc = datetime.now(tz=UTC).isoformat()
     if not session.started_at:
         session.started_at = now_utc
     if not session.ended_at:
@@ -383,8 +385,8 @@ async def end_session(request: EndSessionRequest):
         persona=request.persona,
         conversation_history=request.conversation,
         question_count=question_count,
-        started_at=first_ts or datetime.now(tz=timezone.utc).isoformat(),
-        ended_at=datetime.now(tz=timezone.utc).isoformat(),
+        started_at=first_ts or datetime.now(tz=UTC).isoformat(),
+        ended_at=datetime.now(tz=UTC).isoformat(),
     )
 
     active_sessions[session_id] = session
@@ -395,13 +397,13 @@ async def end_session(request: EndSessionRequest):
 
 
 @router.post("/test-tts")
-async def test_tts_endpoint(text: str = "마이크 테스트 하나 둘 셋"):
+async def test_tts_endpoint(text: str = "마이크 테스트 하나 둘 셋", persona: str = "professional"):
     """Test TTS generation. Returns audio/mpeg bytes."""
     from fastapi.responses import Response
 
     try:
         audio_chunks = []
-        async for chunk in elevenlabs_service.text_to_speech_stream(text):
+        async for chunk in elevenlabs_service.text_to_speech_stream(text, persona=persona):
             audio_chunks.append(chunk)
 
         if not audio_chunks:

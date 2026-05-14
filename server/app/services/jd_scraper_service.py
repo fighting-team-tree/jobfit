@@ -5,7 +5,9 @@ Scrapes job postings from URLs using httpx + BeautifulSoup with Playwright fallb
 """
 
 import re
-from urllib.parse import urlparse
+import socket
+from ipaddress import ip_address
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -13,6 +15,8 @@ from bs4 import BeautifulSoup
 
 class JDScraperService:
     """Service for scraping job descriptions from URLs."""
+
+    MAX_REDIRECTS = 5
 
     # Common selectors for job description content
     JD_SELECTORS = [
@@ -69,13 +73,9 @@ class JDScraperService:
                 "method": "httpx" | "playwright"
             }
         """
-        # Validate URL
-        try:
-            parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                return self._error_response(url, "Invalid URL format")
-        except Exception:
-            return self._error_response(url, "Invalid URL")
+        validation_error = self._validate_safe_url(url)
+        if validation_error:
+            return self._error_response(url, validation_error)
 
         # 1. Try httpx first
         result = await self._scrape_with_httpx(url)
@@ -99,8 +99,8 @@ class JDScraperService:
                 "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
             }
 
-            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+                response = await self._get_with_safe_redirects(client, url, headers)
                 response.raise_for_status()
 
                 html = response.text
@@ -154,6 +154,15 @@ class JDScraperService:
                 )
                 page = await context.new_page()
 
+                async def block_unsafe_requests(route):
+                    request_url = route.request.url
+                    if self._validate_safe_url(request_url):
+                        await route.abort()
+                    else:
+                        await route.continue_()
+
+                await page.route("**/*", block_unsafe_requests)
+
                 # Navigate and wait for content
                 await page.goto(url, wait_until="networkidle", timeout=30000)
                 await page.wait_for_timeout(2000)  # Extra wait for dynamic content
@@ -203,6 +212,78 @@ class JDScraperService:
             return h1.get_text(strip=True)
 
         return ""
+
+    async def _get_with_safe_redirects(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        headers: dict[str, str],
+    ) -> httpx.Response:
+        """Follow redirects only after validating each target URL."""
+        current_url = url
+        for _ in range(self.MAX_REDIRECTS + 1):
+            validation_error = self._validate_safe_url(current_url)
+            if validation_error:
+                raise ValueError(validation_error)
+
+            response = await client.get(current_url, headers=headers)
+            if not response.is_redirect:
+                return response
+
+            location = response.headers.get("location")
+            if not location:
+                return response
+            current_url = urljoin(str(response.url), location)
+
+        raise ValueError("Too many redirects")
+
+    def _validate_safe_url(self, url: str) -> str | None:
+        """Reject URLs that could reach local/private network resources."""
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return "Invalid URL"
+
+        if parsed.scheme not in {"http", "https"}:
+            return "Only HTTP and HTTPS URLs are allowed"
+        if not parsed.hostname:
+            return "Invalid URL format"
+
+        host = parsed.hostname.strip().lower()
+        if host in {"localhost", "localhost.localdomain"} or host.endswith(".localhost"):
+            return "Localhost URLs are not allowed"
+
+        try:
+            ip = ip_address(host)
+            if self._is_blocked_ip(ip):
+                return "Private or local network URLs are not allowed"
+        except ValueError:
+            try:
+                resolved_ips = {
+                    ip_address(info[4][0])
+                    for info in socket.getaddrinfo(
+                        host, parsed.port or 443, type=socket.SOCK_STREAM
+                    )
+                }
+            except socket.gaierror:
+                return "Could not resolve URL host"
+
+            if any(self._is_blocked_ip(ip) for ip in resolved_ips):
+                return "Private or local network URLs are not allowed"
+
+        return None
+
+    def _is_blocked_ip(self, ip) -> bool:
+        return any(
+            (
+                ip.is_private,
+                ip.is_loopback,
+                ip.is_link_local,
+                ip.is_multicast,
+                ip.is_reserved,
+                ip.is_unspecified,
+            )
+        )
 
     def _extract_jd_content(self, soup: BeautifulSoup) -> str:
         """Extract job description content from soup."""

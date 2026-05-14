@@ -1,19 +1,15 @@
 /**
  * ElevenLabs React Hook for Real-time TTS
- * 
- * Uses @elevenlabs/react SDK for direct browser-to-ElevenLabs communication.
- * Bypasses backend for TTS, ensuring stable audio streaming.
+ *
+ * Uses the backend TTS proxy so the ElevenLabs API key never reaches the browser.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-// ElevenLabs API configuration
-const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+const API_BASE = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
-// Voice IDs for different personas
-const VOICE_IDS = {
-    professional: '21m00Tcm4TlvDq8ikWAM', // Rachel - calm, professional
-    friendly: 'AZnzlk1XvdvUeBnXmlld',      // Domi - warm, friendly
-    challenging: 'VR6AewLTigWG4xSOukaG',   // Arnold - assertive
+type AudioWindow = Window & typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
 };
 
 interface UseElevenLabsTTSOptions {
@@ -49,7 +45,12 @@ export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}): UseElev
     // Initialize AudioContext on first interaction
     const initAudioContext = useCallback(() => {
         if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const AudioContextConstructor = window.AudioContext ||
+                (window as AudioWindow).webkitAudioContext;
+            if (!AudioContextConstructor) {
+                throw new Error('AudioContext is not supported in this browser');
+            }
+            audioContextRef.current = new AudioContextConstructor();
         }
         if (audioContextRef.current.state === 'suspended') {
             audioContextRef.current.resume();
@@ -66,7 +67,7 @@ export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}): UseElev
         if (sourceNodeRef.current) {
             try {
                 sourceNodeRef.current.stop();
-            } catch (e) {
+            } catch {
                 // Ignore if already stopped
             }
             sourceNodeRef.current = null;
@@ -77,43 +78,21 @@ export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}): UseElev
 
     // Speak text using ElevenLabs API
     const speak = useCallback(async (text: string) => {
-        if (!ELEVENLABS_API_KEY) {
-            const err = new Error('ElevenLabs API key not configured. Set VITE_ELEVENLABS_API_KEY in .env');
-            setError(err.message);
-            onError?.(err);
-            return;
-        }
-
         // Stop any current playback
         stop();
 
         setIsLoading(true);
         setError(null);
 
-        const voiceId = VOICE_IDS[persona];
         abortControllerRef.current = new AbortController();
 
         try {
-            const response = await fetch(
-                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'audio/mpeg',
-                        'Content-Type': 'application/json',
-                        'xi-api-key': ELEVENLABS_API_KEY,
-                    },
-                    body: JSON.stringify({
-                        text,
-                        model_id: 'eleven_turbo_v2_5',
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75,
-                        },
-                    }),
-                    signal: abortControllerRef.current.signal,
-                }
-            );
+            const params = new URLSearchParams({ text, persona });
+            const response = await fetch(`${API_BASE}/interview/test-tts?${params}`, {
+                method: 'POST',
+                headers: { 'Accept': 'audio/mpeg' },
+                signal: abortControllerRef.current.signal,
+            });
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -197,7 +176,12 @@ export function useElevenLabsStreamingTTS(options: UseElevenLabsTTSOptions = {})
 
     const initAudioContext = useCallback(() => {
         if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const AudioContextConstructor = window.AudioContext ||
+                (window as AudioWindow).webkitAudioContext;
+            if (!AudioContextConstructor) {
+                throw new Error('AudioContext is not supported in this browser');
+            }
+            audioContextRef.current = new AudioContextConstructor();
         }
         if (audioContextRef.current.state === 'suspended') {
             audioContextRef.current.resume();
@@ -211,7 +195,11 @@ export function useElevenLabsStreamingTTS(options: UseElevenLabsTTSOptions = {})
             abortControllerRef.current = null;
         }
         scheduledSourcesRef.current.forEach(source => {
-            try { source.stop(); } catch (e) { }
+            try {
+                source.stop();
+            } catch {
+                // Ignore if already stopped
+            }
         });
         scheduledSourcesRef.current = [];
         if (audioContextRef.current) {
@@ -222,43 +210,21 @@ export function useElevenLabsStreamingTTS(options: UseElevenLabsTTSOptions = {})
     }, []);
 
     const speak = useCallback(async (text: string) => {
-        if (!ELEVENLABS_API_KEY) {
-            const err = new Error('ElevenLabs API key not configured');
-            setError(err.message);
-            onError?.(err);
-            return;
-        }
-
         stop();
         setIsLoading(true);
         setError(null);
 
-        const voiceId = VOICE_IDS[persona];
         const audioContext = initAudioContext();
         nextStartTimeRef.current = audioContext.currentTime;
         abortControllerRef.current = new AbortController();
 
         try {
-            const response = await fetch(
-                `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'audio/mpeg',
-                        'Content-Type': 'application/json',
-                        'xi-api-key': ELEVENLABS_API_KEY,
-                    },
-                    body: JSON.stringify({
-                        text,
-                        model_id: 'eleven_turbo_v2_5',
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75,
-                        },
-                    }),
-                    signal: abortControllerRef.current.signal,
-                }
-            );
+            const params = new URLSearchParams({ text, persona });
+            const response = await fetch(`${API_BASE}/interview/test-tts?${params}`, {
+                method: 'POST',
+                headers: { 'Accept': 'audio/mpeg' },
+                signal: abortControllerRef.current.signal,
+            });
 
             if (!response.ok) {
                 throw new Error(`ElevenLabs API error: ${response.status}`);

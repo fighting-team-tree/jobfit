@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +11,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 class Settings(BaseSettings):
     PROJECT_NAME: str = "JobFit"
     API_V1_STR: str = "/api/v1"
+    ENVIRONMENT: str = "development"
 
     # CORS - exact origins (wildcard patterns don't work in FastAPI CORSMiddleware)
     BACKEND_CORS_ORIGINS: list[str] = [
@@ -45,14 +47,14 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
 
     # Auth & JWT
-    JWT_SECRET_KEY: str = "your-super-secret-jwt-key"  # in prod, use strong random key
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-    
+
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:5173/auth/callback/google" # Frontend URI
+    GOOGLE_REDIRECT_URI: str = "http://localhost:5173/auth/callback/google"
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -63,6 +65,11 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not self.JWT_SECRET_KEY:
+            if self.ENVIRONMENT.lower() in {"production", "prod"}:
+                raise ValueError("JWT_SECRET_KEY must be set in production")
+            self.JWT_SECRET_KEY = secrets.token_urlsafe(32)
+
         # Add Replit domain to CORS if running on Replit
         replit_slug = os.environ.get("REPL_SLUG")
         replit_owner = os.environ.get("REPL_OWNER")

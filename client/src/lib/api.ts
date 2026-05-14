@@ -1,6 +1,7 @@
 /**
  * API Client for JobFit Backend
  */
+import { getAuthHeaders } from './authToken';
 
 // 배포 환경에서는 상대 경로 사용, 로컬 개발에서는 localhost:8000
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
@@ -588,6 +589,7 @@ export const profileAPI = {
   async getMyProfile(): Promise<ProfileResponse> {
     const response = await fetch(`${API_BASE_URL}/profile/me`, {
       method: 'GET',
+      headers: getAuthHeaders(),
       ...fetchOptions,
     });
     return handleResponse<ProfileResponse>(response);
@@ -599,7 +601,7 @@ export const profileAPI = {
   async saveMyProfile(data: ProfileSaveRequest): Promise<ProfileResponse> {
     const response = await fetch(`${API_BASE_URL}/profile/me`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
       ...fetchOptions,
     });

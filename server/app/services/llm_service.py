@@ -9,9 +9,8 @@ Replaces nvidia_service.py for all LLM calls.
 import json
 import re
 
-from openai import AsyncOpenAI
-
 from app.core.config import settings
+from openai import AsyncOpenAI
 
 
 class LLMService:
@@ -398,7 +397,13 @@ JSON만 응답하세요."""
             return self._default_interview_feedback()
 
         # scores 검증: 모든 키가 있는지 확인
-        required_score_keys = ["technical_accuracy", "communication", "problem_solving", "job_fit", "overall"]
+        required_score_keys = [
+            "technical_accuracy",
+            "communication",
+            "problem_solving",
+            "job_fit",
+            "overall",
+        ]
         scores = result.get("scores", {})
         for key in required_score_keys:
             if key not in scores:

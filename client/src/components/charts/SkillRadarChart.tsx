@@ -17,7 +17,17 @@ interface SkillRadarChartProps {
   }>;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+interface RadarTooltipPayload {
+  value?: number;
+}
+
+interface RadarTooltipProps {
+  active?: boolean;
+  payload?: RadarTooltipPayload[];
+  label?: string;
+}
+
+const CustomTooltip = ({ active, payload, label }: RadarTooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-neutral-900 border border-white/10 p-3 rounded-lg shadow-xl backdrop-blur-md">

@@ -21,21 +21,23 @@ async def get_or_create_user(db: AsyncSession, replit_user: ReplitUser) -> User:
     Returns:
         User model instance
     """
+    username = replit_user.username or replit_user.user_id
+
     # Try to find existing user
     result = await db.execute(select(User).where(User.id == replit_user.user_id))
     user = result.scalar_one_or_none()
 
     if user:
         # Update username if changed
-        if user.username != replit_user.username:
-            user.username = replit_user.username
+        if user.username != username:
+            user.username = username
             await db.commit()
         return user
 
     # Create new user
     user = User(
         id=replit_user.user_id,
-        username=replit_user.username,
+        username=username,
     )
     db.add(user)
     await db.commit()

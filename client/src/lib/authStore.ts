@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearAuthToken, getAuthHeaders, getAuthToken, setAuthToken } from './authToken';
 import { useProfileStore } from './store';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ||
@@ -22,10 +23,12 @@ const MOCK_USER = DEV_MODE ? {
 export interface User {
   user_id: string;
   username: string;
+  email?: string;
 }
 
 interface AuthState {
   user: User | null;
+  accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -33,13 +36,15 @@ interface AuthState {
   // Actions
   checkAuth: () => Promise<void>;
   logout: () => void;
+  completeLogin: (token: string, user?: User) => void;
   setMockUser: () => void;  // For local development
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, _get) => ({
+    (set) => ({
       user: null,
+      accessToken: getAuthToken(),
       isAuthenticated: false,
       isLoading: true,
       error: null,
@@ -50,6 +55,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const res = await fetch(`${API_BASE_URL}/auth/me`, {
             credentials: 'include',
+            headers: getAuthHeaders(),
           });
 
           if (!res.ok) {
@@ -63,7 +69,9 @@ export const useAuthStore = create<AuthState>()(
               user: {
                 user_id: data.user_id,
                 username: data.username,
+                email: data.email,
               },
+              accessToken: getAuthToken(),
               isAuthenticated: true,
               isLoading: false,
             });
@@ -88,19 +96,35 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        clearAuthToken();
         // Clear profile data on logout
         useProfileStore.getState().clearAll();
         set({
           user: null,
+          accessToken: null,
           isAuthenticated: false,
           error: null,
         });
       },
 
+      completeLogin: (token, user) => {
+        setAuthToken(token);
+        set({
+          user: user ?? null,
+          accessToken: token,
+          isAuthenticated: Boolean(user),
+          isLoading: false,
+          error: null,
+        });
+        useProfileStore.getState().loadFromServer();
+      },
+
       setMockUser: () => {
         if (MOCK_USER) {
+          clearAuthToken();
           set({
             user: MOCK_USER,
+            accessToken: null,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -113,6 +137,7 @@ export const useAuthStore = create<AuthState>()(
       name: 'jobfit-auth',
       partialize: (state) => ({
         user: state.user,
+        accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
     }

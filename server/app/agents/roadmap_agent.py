@@ -263,7 +263,10 @@ Format your response clearly with code blocks where appropriate."""
         try:
             return await self.llm.call_llm(
                 messages=[
-                    {"role": "system", "content": "You are a senior developer providing solutions."},
+                    {
+                        "role": "system",
+                        "content": "You are a senior developer providing solutions.",
+                    },
                     {"role": "user", "content": prompt},
                 ]
             )

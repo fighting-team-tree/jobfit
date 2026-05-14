@@ -68,7 +68,7 @@ export default function GitConnectModal({ isOpen, onClose, onConnect }: Props) {
                     setStep('repo');
                 }
             }
-        } catch (error) {
+        } catch {
             setValidationResult({ valid: false, error: 'Network error' });
         } finally {
             setIsValidating(false);

@@ -23,3 +23,10 @@ class OptionalUser(BaseModel):
     username: str | None = None
     email: str | None = None
     is_authenticated: bool = False
+
+
+class ReplitUser(BaseModel):
+    """Legacy user shape used by persistence helpers."""
+
+    user_id: str
+    username: str | None = None

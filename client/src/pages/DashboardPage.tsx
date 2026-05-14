@@ -40,10 +40,14 @@ export default function DashboardPage() {
                     if (result.success && result.raw_text) {
                         setJdText(result.raw_text);
                     }
-                } catch {}
+                } catch (error) {
+                    console.warn('Failed to auto-load fixture JD:', error);
+                }
             }
-        }).catch(() => {});
-    }, []);
+        }).catch((error) => {
+            console.warn('Failed to load fixture JDs:', error);
+        });
+    }, [jdText, setJdText]);
 
     const profileData = profile;
     const hasProfile = !!(profileData && (profileData.skills?.length || profileData.experience?.length));

@@ -10,17 +10,9 @@ import io
 import json
 import re
 
+from app.core.config import settings
 from openai import AsyncOpenAI
 from PIL import Image
-
-try:
-    import fitz  # PyMuPDF
-
-    HAS_PYMUPDF = True
-except ImportError:
-    HAS_PYMUPDF = False
-
-from app.core.config import settings
 
 
 def mask_pii(text: str) -> str:
@@ -47,19 +39,21 @@ class ResumeParserService:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.vision_model = settings.LLM_MODEL or "gemini-2.5-flash"
-            self.text_model = settings.LLM_MODEL or "gemini-2.5-flash"
+            self.vision_model = settings.LLM_PARSE_MODEL or "gemini-2.5-flash"
+            self.text_model = settings.LLM_PARSE_MODEL or "gemini-2.5-flash"
         else:  # openai
             self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            self.vision_model = settings.LLM_MODEL or "gpt-4o-mini"
-            self.text_model = settings.LLM_MODEL or "gpt-4o-mini"
+            self.vision_model = settings.LLM_PARSE_MODEL or "gpt-4o-mini"
+            self.text_model = settings.LLM_PARSE_MODEL or "gpt-4o-mini"
 
     def _extract_images_from_pdf(self, pdf_bytes: bytes) -> list[str]:
         """Extract pages from PDF as base64 images."""
-        if not HAS_PYMUPDF:
+        try:
+            import fitz  # PyMuPDF
+        except ImportError as exc:
             raise ImportError(
                 "PyMuPDF is required for PDF parsing. Install with: pip install pymupdf"
-            )
+            ) from exc
 
         base64_images = []
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -205,9 +199,7 @@ class ResumeParserService:
 
         return None
 
-    async def parse_to_structured_json(
-        self, markdown_content: str, max_retries: int = 2
-    ) -> dict:
+    async def parse_to_structured_json(self, markdown_content: str, max_retries: int = 2) -> dict:
         """
         Convert parsed markdown to structured JSON using LLM.
         Gemini 모델 호환을 위해 JSON 추출 로직 강화 및 재시도 지원.
@@ -242,7 +234,7 @@ class ResumeParserService:
 반드시 JSON만 응답하세요. 코드 블록이나 설명 없이 순수 JSON만 출력하세요."""
 
         last_error = None
-        for attempt in range(max_retries):
+        for _attempt in range(max_retries):
             try:
                 response = await self.client.chat.completions.create(
                     model=self.text_model,

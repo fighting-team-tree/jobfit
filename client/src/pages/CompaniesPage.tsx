@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Building2, ExternalLink, Trash2, Play, CheckCircle, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
+import { getAuthHeaders } from '../lib/authToken';
+import type { ProfileStructured } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
 interface Company {
@@ -39,6 +41,7 @@ export default function CompaniesPage() {
         try {
             const res = await fetch(`${API_BASE}/companies/`, {
                 credentials: 'include',
+                headers: getAuthHeaders(),
             });
             if (res.ok) {
                 const data = await res.json();
@@ -57,7 +60,7 @@ export default function CompaniesPage() {
         try {
             const res = await fetch(`${API_BASE}/companies/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ name: newCompanyName }),
                 credentials: 'include',
             });
@@ -78,6 +81,7 @@ export default function CompaniesPage() {
         try {
             await fetch(`${API_BASE}/companies/${id}`, {
                 method: 'DELETE',
+                headers: getAuthHeaders(),
                 credentials: 'include',
             });
             setCompanies(companies.filter(c => c.id !== id));
@@ -262,7 +266,7 @@ function CompanyDetail({
     onUpdate
 }: {
     company: Company;
-    profile: any;
+    profile: ProfileStructured | null;
     onUpdate: (company: Company) => void;
 }) {
     const [jdText, setJdText] = useState(company.jd_text || '');
@@ -277,7 +281,7 @@ function CompanyDetail({
         try {
             const res = await fetch(`${API_BASE}/companies/${company.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ jd_text: jdText, jd_url: jdUrl }),
                 credentials: 'include',
             });
@@ -299,7 +303,7 @@ function CompanyDetail({
             // First update the URL
             await fetch(`${API_BASE}/companies/${company.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ jd_url: jdUrl }),
                 credentials: 'include',
             });
@@ -307,6 +311,7 @@ function CompanyDetail({
             // Then scrape
             const res = await fetch(`${API_BASE}/companies/${company.id}/scrape-jd`, {
                 method: 'POST',
+                headers: getAuthHeaders(),
                 credentials: 'include',
             });
 
@@ -332,7 +337,7 @@ function CompanyDetail({
         try {
             const res = await fetch(`${API_BASE}/companies/${company.id}/analyze`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ profile }),
                 credentials: 'include',
             });

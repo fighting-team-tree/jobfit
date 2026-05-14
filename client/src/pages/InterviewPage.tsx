@@ -10,29 +10,83 @@ const API_BASE = import.meta.env.VITE_API_URL ||
 
 // ============ 유틸리티 함수 ============
 
-function formatProfileForAgent(profile: Record<string, unknown>): string {
+interface ExperienceLike {
+    company?: string;
+    role?: string;
+    duration?: string;
+}
+
+interface ProjectLike {
+    name?: string;
+    tech_stack?: unknown;
+}
+
+interface EducationLike {
+    school?: string;
+    major?: string;
+}
+
+interface ProfileLike {
+    name?: string;
+    skills?: unknown;
+    experience?: unknown;
+    projects?: unknown;
+    certifications?: unknown;
+    education?: unknown;
+}
+
+interface AgentAuthResponse {
+    signed_url?: string | null;
+    agent_id?: string | null;
+    error?: string;
+}
+
+function asStringList(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : [];
+}
+
+function asExperienceList(value: unknown): ExperienceLike[] {
+    return Array.isArray(value) ? value as ExperienceLike[] : [];
+}
+
+function asProjectList(value: unknown): ProjectLike[] {
+    return Array.isArray(value) ? value as ProjectLike[] : [];
+}
+
+function asEducationList(value: unknown): EducationLike[] {
+    return Array.isArray(value) ? value as EducationLike[] : [];
+}
+
+function formatProfileForAgent(profile: ProfileLike): string {
     const parts: string[] = [];
     if (profile.name) parts.push(`이름: ${profile.name}`);
-    if (Array.isArray(profile.skills) && profile.skills.length > 0) {
-        parts.push(`보유 기술: ${profile.skills.join(', ')}`);
+    const skills = asStringList(profile.skills);
+    if (skills.length > 0) {
+        parts.push(`보유 기술: ${skills.join(', ')}`);
     }
-    if (Array.isArray(profile.experience) && profile.experience.length > 0) {
-        const expSummary = profile.experience.map((exp: any) =>
+    const experience = asExperienceList(profile.experience);
+    if (experience.length > 0) {
+        const expSummary = experience.map((exp) =>
             `${exp.company || ''} ${exp.role || ''} (${exp.duration || ''})`
         ).join(' / ');
         parts.push(`경력: ${expSummary}`);
     }
-    if (Array.isArray(profile.projects) && profile.projects.length > 0) {
-        const projSummary = profile.projects.map((p: any) =>
+    const projects = asProjectList(profile.projects);
+    if (projects.length > 0) {
+        const projSummary = projects.map((p) =>
             `${p.name || ''}(${Array.isArray(p.tech_stack) ? p.tech_stack.join(',') : ''})`
         ).join(' / ');
         parts.push(`프로젝트: ${projSummary}`);
     }
-    if (Array.isArray(profile.certifications) && profile.certifications.length > 0) {
-        parts.push(`자격증: ${profile.certifications.join(', ')}`);
+    const certifications = asStringList(profile.certifications);
+    if (certifications.length > 0) {
+        parts.push(`자격증: ${certifications.join(', ')}`);
     }
-    if (Array.isArray(profile.education) && profile.education.length > 0) {
-        const eduSummary = profile.education.map((e: any) =>
+    const education = asEducationList(profile.education);
+    if (education.length > 0) {
+        const eduSummary = education.map((e) =>
             `${e.school || ''} ${e.major || ''}`
         ).join(' / ');
         parts.push(`학력: ${eduSummary}`);
@@ -51,24 +105,18 @@ interface FocusTopic {
     category: 'skill' | 'project' | 'experience';
 }
 
-function extractTopicsFromProfile(profile: Record<string, unknown>): FocusTopic[] {
+function extractTopicsFromProfile(profile: ProfileLike): FocusTopic[] {
     const topics: FocusTopic[] = [];
-    if (Array.isArray(profile.skills)) {
-        profile.skills.slice(0, 8).forEach((skill: string) => {
-            topics.push({ label: skill, category: 'skill' });
-        });
-    }
-    if (Array.isArray(profile.projects)) {
-        profile.projects.slice(0, 4).forEach((p: any) => {
-            if (p.name) topics.push({ label: p.name, category: 'project' });
-        });
-    }
-    if (Array.isArray(profile.experience)) {
-        profile.experience.slice(0, 3).forEach((e: any) => {
-            const expLabel = [e.role, e.company].filter(Boolean).join(' @ ');
-            if (expLabel) topics.push({ label: expLabel, category: 'experience' });
-        });
-    }
+    asStringList(profile.skills).slice(0, 8).forEach((skill) => {
+        topics.push({ label: skill, category: 'skill' });
+    });
+    asProjectList(profile.projects).slice(0, 4).forEach((project) => {
+        if (project.name) topics.push({ label: project.name, category: 'project' });
+    });
+    asExperienceList(profile.experience).slice(0, 3).forEach((experience) => {
+        const expLabel = [experience.role, experience.company].filter(Boolean).join(' @ ');
+        if (expLabel) topics.push({ label: expLabel, category: 'experience' });
+    });
     return topics;
 }
 
@@ -221,12 +269,13 @@ export default function InterviewPage() {
 
     // 프로필 결정: InterviewStore 우선, 없으면 ProfileStore
     const effectiveProfile = profileData || resumeAnalysis;
+    const previewProfile = effectiveProfile as ProfileLike | null;
 
     // 면접관 메시지 수 (질문 수 추정)
     const questionCount = chatHistory.filter(m => m.role === 'interviewer').length;
 
     // 프로필에서 주제 후보 추출
-    const availableTopics = effectiveProfile ? extractTopicsFromProfile(effectiveProfile as Record<string, unknown>) : [];
+    const availableTopics = effectiveProfile ? extractTopicsFromProfile(effectiveProfile as ProfileLike) : [];
 
     const toggleTopic = (label: string) => {
         setSelectedTopics(prev => {
@@ -347,7 +396,7 @@ export default function InterviewPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            const data = await response.json();
+            const data = await response.json() as AgentAuthResponse;
 
             let agentId = data.agent_id;
             const signedUrl = data.signed_url;
@@ -366,7 +415,7 @@ export default function InterviewPage() {
 
             // 프로필/JD를 동적 변수로 주입
             const profileSummary = effectiveProfile
-                ? formatProfileForAgent(effectiveProfile as Record<string, unknown>)
+                ? formatProfileForAgent(effectiveProfile as ProfileLike)
                 : '프로필 정보 없음';
             const jdSummary = jdText || '채용공고 정보 없음';
 
@@ -376,11 +425,6 @@ export default function InterviewPage() {
                 : interviewType === 'behavioral'
                 ? '행동 면접입니다. 과거 경험, 팀 협업, 갈등 해결, 리더십 위주로 질문하세요. STAR 기법으로 답변을 유도하세요.'
                 : '종합 면접입니다. 기술 질문과 행동 질문을 균형 있게 섞어서 질문하세요.';
-
-            // signedUrl이 있으면 사용 (private agent), 없으면 agentId로 연결 (public agent)
-            const startOptions: any = signedUrl
-                ? { signedUrl }
-                : { agentId };
 
             // 선택된 집중 주제
             const allSelectedTopics = [...selectedTopics];
@@ -444,24 +488,31 @@ ${companySection}
 - If the candidate gives short or generic answers → ask simpler, more open-ended questions to help them elaborate.
 - Naturally adjust difficulty without explicitly mentioning it.`;
 
-            // overrides로 시스템 프롬프트 + 첫 메시지 주입
-            startOptions.overrides = {
-                agent: {
-                    prompt: { prompt: systemPrompt },
-                    firstMessage: '안녕하세요, 오늘 면접을 담당하게 된 김면접입니다. 편하게 대화하듯 진행하겠습니다. 먼저 간단한 자기소개와 함께 이번 포지션에 지원하신 동기를 말씀해주시겠어요?',
+            const startOptions = {
+                // signedUrl이 있으면 사용 (private agent), 없으면 agentId로 연결 (public agent)
+                ...(signedUrl ? { signedUrl } : { agentId }),
+                // overrides로 시스템 프롬프트 + 첫 메시지 주입
+                overrides: {
+                    agent: {
+                        prompt: { prompt: systemPrompt },
+                        firstMessage: '안녕하세요, 오늘 면접을 담당하게 된 김면접입니다. 편하게 대화하듯 진행하겠습니다. 먼저 간단한 자기소개와 함께 이번 포지션에 지원하신 동기를 말씀해주시겠어요?',
+                    },
                 },
             };
 
-            await conversation.startSession(startOptions);
+            await conversation.startSession(
+                startOptions as Parameters<typeof conversation.startSession>[0]
+            );
 
             startTimeRef.current = Date.now();
             setElapsedTime(0);
             startSession('agent-session', 5);
             setStatus('면접 진행 중');
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            setError(`면접 시작에 실패했습니다: ${e.message}`);
+            const message = e instanceof Error ? e.message : String(e);
+            setError(`면접 시작에 실패했습니다: ${message}`);
             setStatus('시작 실패');
         }
     };
@@ -496,7 +547,7 @@ ${companySection}
 
             endSession();
             startTimeRef.current = null;
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error('End session failed:', e);
             endSession();
             setError('면접 종료 처리 중 오류가 발생했습니다.');
@@ -528,8 +579,9 @@ ${companySection}
             );
 
             navigate(`/interview/feedback/${result.session_id}`);
-        } catch (e: any) {
-            setError(`피드백 생성 실패: ${e.message}`);
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            setError(`피드백 생성 실패: ${message}`);
         } finally {
             setIsSkipping(false);
         }
@@ -940,7 +992,7 @@ ${companySection}
                                 ref={chatContainerRef}
                                 onScroll={handleChatScroll}
                             >
-                                {chatHistory.map((msg: any, i: number) => (
+                                {chatHistory.map((msg, i) => (
                                     <div key={i} className={`flex ${msg.role === 'interviewer' ? 'justify-start' : 'justify-end'}`}>
                                         <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === 'interviewer'
                                             ? 'bg-neutral-800 text-neutral-200 rounded-tl-none'
@@ -996,12 +1048,12 @@ ${companySection}
                                 <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-neutral-200 space-y-1">
                                     {effectiveProfile && (
                                         <>
-                                            {(effectiveProfile as any).name && <p><span className="text-neutral-500">이름:</span> {(effectiveProfile as any).name}</p>}
-                                            {Array.isArray((effectiveProfile as any).skills) && (effectiveProfile as any).skills.length > 0 && (
-                                                <p><span className="text-neutral-500">기술:</span> {(effectiveProfile as any).skills.slice(0, 10).join(', ')}{(effectiveProfile as any).skills.length > 10 ? ` 외 ${(effectiveProfile as any).skills.length - 10}개` : ''}</p>
+                                            {previewProfile?.name && <p><span className="text-neutral-500">이름:</span> {previewProfile.name}</p>}
+                                            {asStringList(previewProfile?.skills).length > 0 && (
+                                                <p><span className="text-neutral-500">기술:</span> {asStringList(previewProfile?.skills).slice(0, 10).join(', ')}{asStringList(previewProfile?.skills).length > 10 ? ` 외 ${asStringList(previewProfile?.skills).length - 10}개` : ''}</p>
                                             )}
-                                            {Array.isArray((effectiveProfile as any).experience) && (effectiveProfile as any).experience.length > 0 && (
-                                                <p><span className="text-neutral-500">경력:</span> {(effectiveProfile as any).experience.map((e: any) => `${e.company || ''} ${e.role || ''}`).join(', ')}</p>
+                                            {asExperienceList(previewProfile?.experience).length > 0 && (
+                                                <p><span className="text-neutral-500">경력:</span> {asExperienceList(previewProfile?.experience).map((experience) => `${experience.company || ''} ${experience.role || ''}`).join(', ')}</p>
                                             )}
                                         </>
                                     )}

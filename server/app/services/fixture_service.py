@@ -6,7 +6,6 @@ Provides mock gap analysis (keyword matching) to avoid LLM/embedding API calls.
 """
 
 import json
-import re
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -59,7 +58,6 @@ def analyze_gap_fixture(profile: dict, jd_text: str) -> dict:
     프로필 skills와 JD 텍스트를 대소문자 무시 비교.
     """
     profile_skills = [s.strip() for s in profile.get("skills", []) if s.strip()]
-    jd_lower = jd_text.lower()
 
     # JD에서 자격요건/우대사항 섹션 분리
     required_skills = _extract_section_skills(jd_text, "자격요건")
@@ -82,12 +80,12 @@ def analyze_gap_fixture(profile: dict, jd_text: str) -> dict:
         "match_score": total_score,
         "matching_skills": matching_required + matching_preferred,
         "missing_skills": missing_required + missing_preferred,
-        "recommendations": [
-            f"부족한 역량 학습 권장: {', '.join(missing_required[:3])}"
-        ] if missing_required else ["모든 필수 역량을 충족합니다."],
-        "strengths": [
-            f"핵심 역량 보유: {', '.join(matching_required[:5])}"
-        ] if matching_required else [],
+        "recommendations": [f"부족한 역량 학습 권장: {', '.join(missing_required[:3])}"]
+        if missing_required
+        else ["모든 필수 역량을 충족합니다."],
+        "strengths": [f"핵심 역량 보유: {', '.join(matching_required[:5])}"]
+        if matching_required
+        else [],
         "areas_to_improve": missing_required[:5],
         "jd_analysis": {
             "required_skills": required_skills,
@@ -132,7 +130,4 @@ def _extract_section_skills(jd_text: str, section_name: str) -> list[str]:
 def _skill_in_text(jd_skill: str, profile_skills: list[str]) -> bool:
     """프로필 스킬 중 JD 스킬 항목에 포함되는 것이 있는지 확인."""
     jd_lower = jd_skill.lower()
-    for ps in profile_skills:
-        if ps.lower() in jd_lower or jd_lower in ps.lower():
-            return True
-    return False
+    return any(ps.lower() in jd_lower or jd_lower in ps.lower() for ps in profile_skills)

@@ -10,9 +10,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-from openai import AsyncOpenAI
-
 from app.core.config import settings
+from openai import AsyncOpenAI
 
 
 @dataclass
@@ -56,12 +55,12 @@ class ProblemGenerator:
                 api_key=settings.GOOGLE_API_KEY,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            self.model = settings.LLM_MODEL or "gemini-2.5-flash"
+            self.model = settings.LLM_ANALYSIS_MODEL or "gemini-2.5-flash"
         else:  # openai
             if not settings.OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
             self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            self.model = settings.LLM_MODEL or "gpt-4o-mini"
+            self.model = settings.LLM_ANALYSIS_MODEL or "gpt-4o-mini"
 
     async def generate_problems(
         self,

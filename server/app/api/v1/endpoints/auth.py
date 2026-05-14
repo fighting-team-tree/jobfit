@@ -4,21 +4,21 @@ Auth API Endpoints
 Handles Google OAuth and JWT authentication status.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-
 from app.core.auth import get_optional_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.db_models import User
 from app.models.user import OptionalUser
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 router = APIRouter()
 
@@ -37,11 +37,9 @@ class AuthStatusResponse(BaseModel):
 def create_access_token(data: dict) -> str:
     """Create JWT token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
 
@@ -83,25 +81,26 @@ async def login_google():
         auth_endpoint = discovery.get("authorization_endpoint")
 
     scopes = ["openid", "email", "profile"]
-    
-    auth_url = (
-        f"{auth_endpoint}?"
-        f"response_type=code&"
-        f"client_id={settings.GOOGLE_CLIENT_ID}&"
-        f"redirect_uri={settings.GOOGLE_REDIRECT_URI}&"
-        f"scope={' '.join(scopes)}&"
-        f"access_type=offline&"
-        f"prompt=consent"
+
+    query = urlencode(
+        {
+            "response_type": "code",
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "scope": " ".join(scopes),
+            "access_type": "offline",
+            "prompt": "consent",
+        }
     )
-    
+    auth_url = f"{auth_endpoint}?{query}"
+
     return RedirectResponse(url=auth_url)
 
 
 @router.get("/callback/google")
 async def auth_google_callback(
-    code: str, 
-    request: Request,
-    db: AsyncSession | None = Depends(get_db)
+    code: str,
+    db: AsyncSession | None = Depends(get_db),
 ):
     """
     Handles the Google OAuth2 callback.
@@ -126,22 +125,29 @@ async def auth_google_callback(
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        
+        token_response.raise_for_status()
+
         token_data = token_response.json()
-        
+
         if "error" in token_data:
-            raise HTTPException(status_code=400, detail=f"OAuth Error: {token_data.get('error_description')}")
-            
+            raise HTTPException(
+                status_code=400,
+                detail=f"OAuth Error: {token_data.get('error_description')}",
+            )
+
         access_token = token_data.get("access_token")
-        
+        if not access_token:
+            raise HTTPException(status_code=400, detail="OAuth access token missing")
+
         # Get user info
         user_info_response = await client.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
-        
+        user_info_response.raise_for_status()
+
         user_info = user_info_response.json()
-        
+
     google_user_id = user_info.get("sub")
     email = user_info.get("email")
     name = user_info.get("name")
@@ -155,16 +161,16 @@ async def auth_google_callback(
         query = select(User).where(User.id == google_user_id)
         result = await db.execute(query)
         db_user = result.scalar_one_or_none()
-        
+
         if not db_user:
             db_user = User(
                 id=google_user_id,
-                username=name or email.split("@")[0],
+                username=name or (email.split("@")[0] if email else "Google User"),
             )
             db.add(db_user)
         else:
             db_user.username = name or db_user.username
-            
+
         await db.commit()
 
     # Create our own JWT token
@@ -174,11 +180,7 @@ async def auth_google_callback(
         "username": name,
         "picture": picture,
     }
-    
+
     our_token = create_access_token(jwt_payload)
-    
-    return {
-        "access_token": our_token,
-        "token_type": "bearer",
-        "user": jwt_payload
-    }
+
+    return {"access_token": our_token, "token_type": "bearer", "user": jwt_payload}

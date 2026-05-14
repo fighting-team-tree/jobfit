@@ -10,7 +10,7 @@ from app.models.db_models import UserProfile
 from app.models.user import OptionalUser, ReplitUser
 from app.services.user_service import get_or_create_user
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,8 +46,7 @@ class ProfileResponse(BaseModel):
     jd_text: str | None = None
     github_url: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Helper Functions ============

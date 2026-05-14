@@ -5,9 +5,8 @@ Uses OpenAI SDK for text embedding (supports Gemini and OpenAI providers).
 """
 
 import numpy as np
-from openai import AsyncOpenAI
-
 from app.core.config import settings
+from openai import AsyncOpenAI
 
 
 class EmbeddingService:

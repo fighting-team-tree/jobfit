@@ -1,19 +1,15 @@
 /**
- * Login Button for Replit Authentication
+ * Login Button for Google OAuth authentication.
  *
- * Uses Replit's built-in authentication via the REPL_AUTH cookie.
+ * Starts the backend-managed Google OAuth flow.
  */
-import { useEffect } from 'react';
 import { LogIn, LogOut, User } from 'lucide-react';
 import { useAuthStore } from '../../lib/authStore';
 
 export function LoginButton() {
-  const { user, isAuthenticated, isLoading, checkAuth, logout, setMockUser } = useAuthStore();
-
-  // Check auth status on mount
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+  const { user, isAuthenticated, isLoading, logout, setMockUser } = useAuthStore();
+  const apiBase = import.meta.env.VITE_API_URL ||
+    (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
   // Show loading state
   if (isLoading) {
@@ -47,23 +43,13 @@ export function LoginButton() {
   // Not logged in state
   return (
     <div className="flex items-center gap-2">
-      {/* Replit Login Button */}
-      <script
-        src="https://auth.util.repl.co/script.js"
-        // @ts-ignore
-        authed="checkAuth()"
-      />
       <button
         onClick={() => {
-          // Check if we're on Replit
-          // @ts-ignore
-          if (window.LoginWithReplit) {
-            // @ts-ignore
-            window.LoginWithReplit();
-          } else {
-            // For local development, use mock user
+          if (import.meta.env.DEV) {
             setMockUser();
+            return;
           }
+          window.location.href = `${apiBase}/auth/login/google`;
         }}
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
       >
@@ -72,12 +58,4 @@ export function LoginButton() {
       </button>
     </div>
   );
-}
-
-// Make checkAuth available globally for Replit auth script
-if (typeof window !== 'undefined') {
-  // @ts-ignore
-  window.checkAuth = () => {
-    useAuthStore.getState().checkAuth();
-  };
 }

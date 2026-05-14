@@ -15,6 +15,7 @@ const InterviewHistoryPage = lazy(() => import('./pages/InterviewHistoryPage'))
 const RoadmapPage = lazy(() => import('./pages/RoadmapPage'))
 const ProblemPage = lazy(() => import('./pages/ProblemPage'))
 const CompaniesPage = lazy(() => import('./pages/CompaniesPage'))
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 
 const queryClient = new QueryClient()
 
@@ -40,6 +41,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/roadmap" element={<RoadmapPage />} />
               <Route path="/problem/:id" element={<ProblemPage />} />
               <Route path="/companies" element={<CompaniesPage />} />
+              <Route path="/auth/callback/google" element={<AuthCallbackPage />} />
             </Routes>
           </Suspense>
         </BrowserRouter>
