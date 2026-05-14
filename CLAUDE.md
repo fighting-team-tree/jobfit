@@ -56,8 +56,13 @@ jobfit/
 │           ├── api.ts      # API 클라이언트
 │           └── store.ts    # Zustand 스토어
 │
-├── .agent/                 # AI Agent 설정 (Gemini, Codex)
+├── .agent/                 # AI Agent 공통 기준/메모리
 │   └── skills/             # Agent 스킬 정의
+│
+├── .codex/                 # Codex CLI/앱 전용 규칙/스킬/프롬프트
+│   ├── rules/              # 프로젝트 규칙
+│   ├── skills/             # Codex 스킬
+│   └── prompts/            # 반복 작업 프롬프트
 │
 └── .claude/                # Claude Code 설정
     ├── commands/           # 슬래시 명령어
