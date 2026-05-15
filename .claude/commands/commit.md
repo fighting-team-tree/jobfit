@@ -19,6 +19,8 @@ staged 변경사항을 검토하고 WHY/WHAT/IMPACT 컨벤션에 맞는 커밋�
 
 4. **대용량 파일 검사**: 새로 추가된 파일 중 1MB 이상인 것이 있으면 경고.
 
+5. **컨벤션 훅 확인**: 첫 줄 `type(scope): subject`를 유지하고, 필요 시 `uv run python scripts/validate_commit_msg.py <msg-file>`로 검증한다. Lore/런타임 trailer는 WHY/WHAT 뒤에만 추가한다.
+
 ### Step 2: 커밋 메시지 생성
 staged diff를 분석하여 아래 형식의 커밋 메시지를 **자동 생성**한다:
 

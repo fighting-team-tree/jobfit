@@ -34,6 +34,8 @@ Refs: #issue-number
 2. **WHAT is behavior-focused**: Describe behavior/feature changes, NOT file names
 3. **IMPACT is optional**: Only when changes affect other modules
 4. **Atomic commits**: One feature/fix per commit
+5. **Project header wins**: The first line must remain `type(scope): subject`; runtime/Lore trailers may be appended only after WHY/WHAT.
+6. **Hook verification**: Validate messages with `.githooks/commit-msg` (`git config core.hooksPath .githooks`).
 
 ## Branch Strategy
 - `main`: Production | `dev`: Integration

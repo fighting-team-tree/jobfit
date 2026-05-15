@@ -19,7 +19,9 @@ jobfit/
 ├── tests/                  # pytest 테스트와 수동 실험 스크립트
 ├── .agent/                 # 공통 AI Agent 기준 규칙/메모리
 ├── .claude/                # Claude Code 전용 명령/규칙
-└── .codex/                 # Codex 전용 규칙/스킬/프롬프트
+├── .codex/                 # Codex 전용 규칙/스킬/프롬프트
+├── .githooks/              # Git hook 검증 스크립트 진입점
+└── scripts/                # 저장소 보조 검증 스크립트
 ```
 
 ## 핵심 파일
@@ -34,6 +36,7 @@ jobfit/
 | `server/app/agents/problem_generator.py` | 문제 생성 |
 | `client/src/lib/api.ts` | API 클라이언트 |
 | `client/src/lib/authStore.ts` | 인증 상태 저장소 |
+| `scripts/validate_commit_msg.py` | JobFit 커밋 메시지 컨벤션 검증 |
 
 ## 포트
 

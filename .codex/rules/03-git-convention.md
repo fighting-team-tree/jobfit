@@ -54,7 +54,8 @@ Refs: #이슈번호 (선택)
 2. WHAT은 파일명 나열이 아니라 기능/동작 중심으로 씁니다.
 3. IMPACT는 API, DB, 인증, 배포, 외부 연동 등 다른 영역에 영향이 있을 때만 씁니다.
 4. 커밋은 원자적으로 유지합니다. 독립적인 변경은 분리 커밋을 제안합니다.
-5. 상위 Codex 런타임이 별도 trailer를 요구하면 WHY/WHAT/IMPACT 뒤에 추가합니다.
+5. 첫 줄 `type(scope): subject`는 절대 생략하지 않습니다. 상위 Codex/OMX 런타임이 Lore trailer를 요구해도 WHY/WHAT/IMPACT 뒤에 추가하며, trailer가 프로젝트 첫 줄을 대체할 수 없습니다.
+6. `.githooks/commit-msg` 훅과 `scripts/validate_commit_msg.py`로 커밋 메시지를 검증합니다. 로컬에서 `git config core.hooksPath .githooks`를 적용합니다.
 
 ## 브랜치 전략
 

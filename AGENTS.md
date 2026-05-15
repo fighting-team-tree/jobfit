@@ -74,7 +74,8 @@ Refs: #이슈번호 (선택)
 
 - 커밋 전 staged diff, 보안 패턴, 원자성을 확인합니다.
 - `.env`, API key, token, credential 파일은 절대 커밋하지 않습니다.
-- 상위 Codex 런타임이 별도 trailer 형식을 요구하면, 위 프로젝트 컨벤션을 유지한 뒤 필요한 trailer를 추가합니다.
+- 첫 줄은 반드시 `type(scope): subject` 프로젝트 형식을 사용합니다. 상위 Codex/OMX 런타임이 Lore trailer를 요구해도 프로젝트 WHY/WHAT 뒤에만 추가하며, trailer가 첫 줄 형식을 대체할 수 없습니다.
+- 커밋 전 `.githooks/commit-msg` 검증이 활성화되어 있는지 확인합니다(`git config core.hooksPath .githooks`).
 
 ## 보안/개인정보
 

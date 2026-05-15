@@ -15,7 +15,11 @@
 - 아키텍처 변경, 새로운 라이브러리 추가(`.toml`, `.json`), API 엔드포인트 변경 등이 발생하면 즉시 스펙 문서에 반영한다.
 - **Code is Truth**: 코드는 수정되었는데 문서는 그대로인 상황(Documentation Drift)을 절대 만들지 않는다.
 
-### C. Update Task List (`task.md`)
+### C. Update API and Memory Audit
+- API 경로, 요청/응답, WebSocket 경로가 바뀌면 `.agent/memory/api_schema.md`를 갱신한다.
+- 인메모리 저장소, cache, localStorage/sessionStorage, runtime state 처리 방식이 바뀌면 `.agent/memory/memory_audit.md`를 갱신한다.
+
+### D. Update Task List (`task.md`)
 - 완료된 작업 항목을 `[x]`로 체크한다.
 - 작업 도중 발견된 새로운 할 일이나 하위 작업이 있다면 목록에 추가한다.
 

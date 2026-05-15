@@ -1,17 +1,20 @@
+# Active Context
+
 ## Current Status
-- **Phase:** Tooling Alignment - Codex project guidance
-- **Goal:** Keep Codex, Claude, and shared Agent instructions aligned for JobFit development.
+- **Phase:** Git convention hardening and memory cleanup
+- **Goal:** Keep project-local rules, commit workflow, and agent memory aligned with the actual JobFit codebase.
 
 ## Recent Actions
-- **Codex Structure:**
-  - Created root `AGENTS.md` as the Codex entrypoint for repository-wide instructions.
-  - Expanded `.codex/` with rules, skills, and prompts based on `.agent/` and `.claude/`.
-  - Added Codex Git convention coverage via `.codex/rules/03-git-convention.md` and `.codex/skills/git-convention/SKILL.md`.
-- **Documentation Sync:**
-  - Removed redundant `AGENT.md`; Codex guidance now lives in root `AGENTS.md` and `.codex/`.
-  - Updated `CLAUDE.md` project tree to mention `.codex/`.
+- **Git Convention Fix:**
+  - Identified the cause of the convention miss: runtime/Lore-style first lines were allowed to replace the project-required `type(scope): subject` header.
+  - Added `scripts/validate_commit_msg.py` and `.githooks/commit-msg` to enforce the JobFit commit message format.
+  - Set local `git config core.hooksPath .githooks` so future local commits are checked automatically.
+  - Updated `.agent`, `.codex`, `.claude`, and root `AGENTS.md` guidance so runtime/Lore trailers can only be appended after project WHY/WHAT.
+- **Memory Cleanup:**
+  - Refreshed `.agent/memory/api_schema.md` and `.agent/memory/tech_spec.md` against current FastAPI/React code.
+  - Added `.agent/memory/memory_audit.md` to distinguish agent memory, OMX runtime state, backend in-memory fallback stores, and frontend localStorage persistence.
 
 ## Next Steps
-- Keep `.agent/`, `.claude/`, and `.codex/` synchronized when tool-facing rules change.
-- Use `.codex/skills/git-convention` for future Codex-side commit message generation.
-- Run normal code validation (`make lint`, `make test`, frontend lint/build) when source code changes accompany documentation/tooling changes.
+- Do not rewrite already-pushed commit history unless explicitly requested; use the new validator to prevent future misses.
+- Prioritize replacing browser-stored GitHub tokens and unbounded backend in-memory stores with safer bounded/server-side storage.
+- Run normal validation (`make lint`, `make test`, frontend lint/build) when source behavior changes, not for documentation-only updates unless needed.

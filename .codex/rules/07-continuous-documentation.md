@@ -10,6 +10,8 @@
 - `AGENTS.md`: Codex 루트 지침
 - `.agent/memory/active_context.md`: 최근 작업과 다음 단계
 - `.agent/memory/tech_spec.md`: 아키텍처, 의존성, API 변경
+- `.agent/memory/api_schema.md`: API 경로/요청/응답 변경
+- `.agent/memory/memory_audit.md`: 저장소/런타임/브라우저 메모리 표면과 리스크 변경
 
 ## 원칙
 

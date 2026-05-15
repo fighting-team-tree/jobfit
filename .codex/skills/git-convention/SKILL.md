@@ -36,7 +36,9 @@ Refs: #이슈번호 (선택)
 - WHY는 “이 커밋이 없으면 어떤 문제가 남는가?”에 답합니다.
 - WHAT은 파일명 대신 사용자/시스템 동작 변화를 씁니다.
 - IMPACT는 API, DB, 인증, 배포, 외부 연동 영향이 있을 때만 씁니다.
-- 상위 Codex 런타임이 별도 trailer를 요구하면 프로젝트 메시지 뒤에 추가합니다.
+- 첫 줄 `type(scope): subject`는 필수이며, Lore/런타임 trailer가 이를 대체할 수 없습니다.
+- 상위 Codex 런타임이 별도 trailer를 요구하면 프로젝트 WHY/WHAT/IMPACT 뒤에 추가합니다.
+- 최종 메시지는 `uv run python scripts/validate_commit_msg.py <msg-file>` 또는 `.githooks/commit-msg` 훅으로 검증합니다.
 
 ## 타입
 

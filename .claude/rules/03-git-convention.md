@@ -34,6 +34,8 @@ Refs: #이슈번호
 2. **WHAT은 기능 중심**: 파일명 나열이 아닌 동작/기능 변경 기술
 3. **IMPACT는 선택**: 다른 모듈에 영향 줄 때만 작성
 4. **원자적 커밋**: 하나의 기능/수정당 하나의 커밋
+5. **프로젝트 첫 줄 우선**: 첫 줄은 반드시 `type(scope): subject`를 유지하며, 런타임/Lore trailer는 WHY/WHAT 뒤에만 추가
+6. **훅 검증**: `.githooks/commit-msg`와 `scripts/validate_commit_msg.py`로 메시지 검증
 
 ## 브랜치 전략
 - `main`: 프로덕션 | `dev`: 통합 브랜치
