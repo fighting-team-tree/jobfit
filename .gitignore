@@ -114,6 +114,7 @@ data/
 parsing_result.md
 
 # AI Agent Temporary Data
+.omx/
 .codex/edge-profile/
 .codex/edge-profile-inspect/
 .codex/screens/
