@@ -10,6 +10,7 @@ import json
 import re
 
 from app.core.config import settings
+from app.services.pii import mask_pii, mask_pii_payload
 from openai import AsyncOpenAI
 
 
@@ -110,10 +111,11 @@ class LLMService:
 
     async def parse_resume(self, resume_text: str) -> dict:
         """Parse resume text into structured JSON."""
+        safe_resume_text = mask_pii(resume_text)
         prompt = f"""다음 이력서 텍스트를 분석하여 JSON 형식으로 구조화해주세요.
 
 이력서:
-{resume_text}
+{safe_resume_text}
 
 다음 형식의 JSON으로 응답해주세요:
 {{
@@ -143,7 +145,10 @@ JSON만 응답하세요."""
         1. LLM extracts JD requirements and profile skills
         2. Embedding service matches skills deterministically
         """
-        extraction = await self._extract_skills(profile, jd_text)
+        safe_profile = mask_pii_payload(profile)
+        safe_jd_text = mask_pii(jd_text)
+
+        extraction = await self._extract_skills(safe_profile, safe_jd_text)
 
         if extraction.get("error"):
             return {"error": "Failed to extract skills", "raw": extraction}
@@ -165,7 +170,7 @@ JSON만 응답하세요."""
             preferred_skills=preferred_skills,
         )
 
-        feedback = await self._generate_feedback(match_result, profile, jd_text)
+        feedback = await self._generate_feedback(match_result, safe_profile, safe_jd_text)
 
         return {
             "match_score": match_result.total_score,
@@ -228,7 +233,7 @@ JSON만 응답하세요."""
 ```
 JSON만 응답하세요."""
 
-        return await self._call_llm_json(prompt, model=self.parse_model, temperature=0.0)
+        return await self.call_llm_json(prompt, model=self.parse_model, temperature=0.0)
 
     async def _generate_feedback(self, match_result, profile: dict, jd_text: str) -> dict:
         """Generate qualitative feedback based on match results."""
@@ -255,12 +260,15 @@ JSON만 응답하세요."""
 ```
 JSON만 응답하세요."""
 
-        return await self._call_llm_json(prompt, temperature=0.3)
+        return await self.call_llm_json(prompt, temperature=0.3)
 
     async def generate_interview_question(
         self, profile: dict, jd_text: str, conversation_history: list, persona: str = "professional"
     ) -> str:
         """Generate an interview question with follow-up and adaptive difficulty."""
+        safe_profile = mask_pii_payload(profile)
+        safe_jd_text = mask_pii(jd_text)
+        safe_history = mask_pii_payload(conversation_history)
         persona_prompts = {
             "professional": "당신은 전문적이고 차분한 면접관입니다. 기술적 깊이를 확인하는 질문을 합니다.",
             "friendly": "당신은 친근하고 편안한 분위기의 면접관입니다. 지원자가 편하게 답변할 수 있도록 합니다.",
@@ -270,17 +278,17 @@ JSON만 응답하세요."""
         history_text = "\n".join(
             [
                 f"{'면접관' if m['role'] == 'interviewer' else '지원자'}: {m['content']}"
-                for m in conversation_history[-6:]
+                for m in safe_history[-6:]
             ]
         )
 
         prompt = f"""{persona_prompts.get(persona, persona_prompts["professional"])}
 
 지원자 프로필:
-{profile}
+{safe_profile}
 
 채용공고:
-{jd_text}
+{safe_jd_text}
 
 대화 기록:
 {history_text}
@@ -300,7 +308,7 @@ JSON만 응답하세요."""
 - 질문은 한국어로, 간결하게 작성하세요.
 - 질문만 출력하세요."""
 
-        content = await self._call_llm(
+        content = await self.call_llm(
             messages=[
                 {
                     "role": "system",
@@ -321,13 +329,16 @@ JSON만 응답하세요."""
         persona: str = "professional",
     ) -> dict:
         """면접 대화 내용을 분석하여 상세 피드백 생성."""
+        safe_profile = mask_pii_payload(profile)
+        safe_jd_text = mask_pii(jd_text)
+        safe_history = mask_pii_payload(conversation_history)
         history_text = "\n".join(
             f"{'면접관' if m.get('role') == 'interviewer' else '지원자'}: {m.get('content', '')}"
-            for m in conversation_history
+            for m in safe_history
         )
 
         # 프로필 요약 (너무 길면 truncate)
-        profile_summary = json.dumps(profile, ensure_ascii=False, default=str)
+        profile_summary = json.dumps(safe_profile, ensure_ascii=False, default=str)
         if len(profile_summary) > 1000:
             profile_summary = profile_summary[:1000] + "..."
 
@@ -335,7 +346,7 @@ JSON만 응답하세요."""
 
 ## 면접 정보
 - 면접관 스타일: {persona}
-- 지원 포지션 (채용공고): {jd_text[:500] if len(jd_text) > 500 else jd_text}
+- 지원 포지션 (채용공고): {safe_jd_text[:500] if len(safe_jd_text) > 500 else safe_jd_text}
 
 ## 지원자 프로필
 {profile_summary}
@@ -464,7 +475,7 @@ README 발췌:
 
 JSON만 응답하세요."""
 
-        result = await self._call_llm_json(
+        result = await self.call_llm_json(
             prompt,
             system_msg="You are a technical recruiter AI that analyzes GitHub repositories to identify developer skills.",
             model=self.parse_model,

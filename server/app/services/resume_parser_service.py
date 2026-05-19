@@ -11,21 +11,9 @@ import json
 import re
 
 from app.core.config import settings
+from app.services.pii import mask_pii
 from openai import AsyncOpenAI
 from PIL import Image
-
-
-def mask_pii(text: str) -> str:
-    """Mask PII (email, phone) in text."""
-    # Email masking
-    email_regex = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    text = re.sub(email_regex, "[EMAIL_REDACTED]", text)
-
-    # Phone number masking
-    phone_regex = r"\d{2,3}[-\s]?\d{3,4}[-\s]?\d{4}"
-    text = re.sub(phone_regex, "[PHONE_REDACTED]", text)
-
-    return text
 
 
 class ResumeParserService:

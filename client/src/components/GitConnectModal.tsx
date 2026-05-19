@@ -33,10 +33,7 @@ export default function GitConnectModal({ isOpen, onClose, onConnect }: Props) {
         const saved = localStorage.getItem('jobfit_github_config');
         if (saved) {
             const config = JSON.parse(saved);
-            setToken(config.token);
             setSelectedRepo(config.repoFullName);
-            setValidationResult({ valid: true, username: config.username });
-            setStep('repo');
         }
     }, [isOpen]);
 
@@ -84,8 +81,11 @@ export default function GitConnectModal({ isOpen, onClose, onConnect }: Props) {
             username: validationResult.username,
         };
 
-        // Save to localStorage
-        localStorage.setItem('jobfit_github_config', JSON.stringify(config));
+        // PAT는 저장하지 않고, 저장소 선택 정보만 브라우저에 보관합니다.
+        localStorage.setItem('jobfit_github_config', JSON.stringify({
+            repoFullName: config.repoFullName,
+            username: config.username,
+        }));
         onConnect(config);
         onClose();
     };
@@ -156,7 +156,7 @@ export default function GitConnectModal({ isOpen, onClose, onConnect }: Props) {
                                 <strong className="text-neutral-200">필요 권한:</strong> repo (Full control)
                             </p>
                             <p className="text-sm text-neutral-500 mt-2">
-                                토큰은 브라우저에만 저장되며, 서버에 전송되지 않습니다.
+                                토큰은 검증/푸시 요청 때 서버로 전송되지만 저장하지 않으며, 브라우저에도 저장하지 않습니다.
                             </p>
                         </div>
 

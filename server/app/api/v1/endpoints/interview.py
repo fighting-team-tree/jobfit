@@ -11,9 +11,10 @@ from datetime import UTC, datetime
 
 from app.core.config import settings
 from app.services.elevenlabs_service import elevenlabs_service
+from app.services.in_memory_store import ExpiringStore
 from app.services.llm_service import llm_service
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ class InterviewSession(BaseModel):
     profile: dict
     jd_text: str
     persona: str = "professional"  # professional, friendly, challenging
-    conversation_history: list[dict] = []
+    conversation_history: list[dict] = Field(default_factory=list)
     question_count: int = 0
     max_questions: int = 5
     started_at: str | None = None
@@ -53,11 +54,11 @@ class InterviewFeedbackResponse(BaseModel):
     conversation: list[dict]
     feedback_summary: str
     scores: dict
-    strengths: list[str] = []
-    improvements: list[str] = []
-    sample_answers: list[dict] = []
-    star_analysis: list[dict] = []
-    time_analysis: dict = {}
+    strengths: list[str] = Field(default_factory=list)
+    improvements: list[str] = Field(default_factory=list)
+    sample_answers: list[dict] = Field(default_factory=list)
+    star_analysis: list[dict] = Field(default_factory=list)
+    time_analysis: dict = Field(default_factory=dict)
 
 
 class InterviewAnswerRequest(BaseModel):
@@ -68,14 +69,17 @@ class EndSessionRequest(BaseModel):
     """Request to end an Agent-mode interview session."""
 
     conversation: list[dict]
-    profile: dict = {}
+    profile: dict = Field(default_factory=dict)
     jd_text: str = ""
     persona: str = "professional"
 
 
 # ============ In-memory session storage ============
 # In production, use Redis or database
-active_sessions: dict[str, InterviewSession] = {}
+active_sessions: ExpiringStore[str, InterviewSession] = ExpiringStore(
+    ttl_seconds=60 * 60 * 2,
+    max_size=500,
+)
 
 
 def _compute_time_analysis(conversation: list[dict]) -> dict:
@@ -142,7 +146,7 @@ async def start_interview(request: StartInterviewRequest):
     """
     import uuid
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = uuid.uuid4().hex
 
     session = InterviewSession(
         session_id=session_id,
@@ -373,7 +377,7 @@ async def end_session(request: EndSessionRequest):
     """
     import uuid
 
-    session_id = str(uuid.uuid4())[:8]
+    session_id = uuid.uuid4().hex
 
     question_count = len([m for m in request.conversation if m.get("role") == "interviewer"])
     first_ts = request.conversation[0].get("timestamp") if request.conversation else None

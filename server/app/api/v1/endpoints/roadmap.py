@@ -13,9 +13,10 @@ from app.core.auth import get_optional_user
 from app.core.database import get_db
 from app.models.db_models import Roadmap as RoadmapModel
 from app.models.user import OptionalUser, ReplitUser
+from app.services.in_memory_store import ExpiringStore
 from app.services.user_service import get_or_create_user
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -24,8 +25,14 @@ router = APIRouter()
 
 
 # ============ In-Memory Storage (Fallback) ============
-roadmaps_store: dict = {}
-problems_store: dict = {}
+roadmaps_store: ExpiringStore[str, object] = ExpiringStore(
+    ttl_seconds=60 * 60 * 6,
+    max_size=300,
+)
+problems_store: ExpiringStore[str, object] = ExpiringStore(
+    ttl_seconds=60 * 60 * 6,
+    max_size=1000,
+)
 
 
 def use_database(db: AsyncSession | None, user: OptionalUser) -> bool:
@@ -44,7 +51,7 @@ class TodoItem(BaseModel):
     skill: str
     priority: str  # high, medium, low
     estimated_hours: int
-    resources: list[str] = []
+    resources: list[str] = Field(default_factory=list)
     completed: bool = False
 
 
@@ -62,8 +69,8 @@ class RoadmapRequest(BaseModel):
     """Request for generating learning roadmap."""
 
     gap_analysis: dict  # Result from /analyze/gap
-    available_hours_per_week: int = 10
-    weeks: int = 4
+    available_hours_per_week: int = Field(default=10, ge=1, le=80)
+    weeks: int = Field(default=4, ge=1, le=52)
 
 
 class RoadmapResponse(BaseModel):
@@ -81,7 +88,7 @@ class AgentRoadmapRequest(BaseModel):
     """Request for Claude Agent roadmap generation."""
 
     missing_skills: list[str]
-    timeline_weeks: int = 4
+    timeline_weeks: int = Field(default=4, ge=1, le=52)
     target_role: str | None = None
     current_level: str = "intermediate"
 
@@ -95,8 +102,8 @@ class ProblemResponse(BaseModel):
     difficulty: Literal["easy", "medium", "hard"]
     type: Literal["coding", "quiz", "practical"]  # Frontend expects 'type'
     skill: str
-    hints: list[str] = []
-    test_cases: list[dict] = []
+    hints: list[str] = Field(default_factory=list)
+    test_cases: list[dict] = Field(default_factory=list)
     starter_code: str | None = None
     language: str = "python"
     solution: str | None = None
@@ -106,10 +113,10 @@ class ProblemResponse(BaseModel):
 class GenerateProblemsRequest(BaseModel):
     """Request to generate problems for a week."""
 
-    week_number: int
+    week_number: int = Field(ge=1)
     skills: list[str]  # Frontend sends 'skills'
-    count: int = 3  # Frontend sends 'count'
-    learning_objectives: list[str] = []
+    count: int = Field(default=3, ge=1, le=10)  # Frontend sends 'count'
+    learning_objectives: list[str] = Field(default_factory=list)
 
 
 class EvaluateSolutionRequest(BaseModel):

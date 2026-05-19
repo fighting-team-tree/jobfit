@@ -17,8 +17,8 @@ graph TD
 
     subgraph "Storage"
         BE -->|Authenticated users| DB[(PostgreSQL via SQLAlchemy/asyncpg)]
-        BE -->|Demo fallback| MEM[(Process memory dicts)]
-        FE -->|Client persistence| LS[(localStorage/Zustand persist)]
+        BE -->|Demo fallback| MEM[(TTL/LRU process memory stores)]
+        FE -->|Client persistence| LS[(sessionStorage/localStorage)]
     end
 ```
 
@@ -41,20 +41,21 @@ graph TD
 - `.omx/state/*.json`, `.omx/logs/*.jsonl`, `.omx/cache/codebase-map.json` are session/runtime metadata, not product data storage.
 
 ### Backend in-memory fallback
-- `profiles_store`: unauthenticated profile demo state.
-- `companies_store`: unauthenticated company/JD demo state.
-- `active_sessions`: interview conversation sessions.
-- `roadmaps_store`, `problems_store`: roadmap/problem fallback state.
-- `EmbeddingService._cache`: process-local embedding cache.
+- `profiles_store`: non-production demo profile state scoped by `X-JobFit-Client-Session`, backed by `ExpiringStore` with TTL/max-size cleanup.
+- `companies_store`: non-production demo company/JD state scoped by `X-JobFit-Client-Session`, backed by `ExpiringStore` with TTL/max-size cleanup.
+- `active_sessions`: interview conversation sessions, backed by `ExpiringStore` with TTL/max-size cleanup.
+- `roadmaps_store`, `problems_store`: roadmap/problem fallback state, backed by `ExpiringStore` with TTL/max-size cleanup.
+- `EmbeddingService._cache`: process-local embedding cache with hashed text keys, TTL, and LRU eviction.
 
-Known risk: these stores are process-local, unbounded or lightly bounded, and lost on restart. Production paths should prefer DB/Redis/object storage and TTL/LRU cleanup.
+Known risk: these stores are still process-local and lost on restart. Profile/company fallback is blocked in production, but production interview/problem workflows should still prefer DB/Redis/object storage if persistence across restarts matters.
 
 ### Frontend persistence
-- `jobfit-profile`: resume/JD/profile/analysis state.
-- `jobfit-auth` and `jobfit_access_token`: auth state/token.
+- `jobfit-profile`: only non-PII GitHub URL metadata; legacy persisted resume/JD/profile data is stripped by the v2 Zustand migration.
+- `jobfit-auth` and `jobfit_access_token`: auth state/token. `jobfit_access_token` now uses `sessionStorage` and removes legacy `localStorage` copies.
 - `jobfit-interview-history`: recent feedback summaries, capped at 50 entries.
 - `jobfit-problems`: generated problem cache.
-- `jobfit_github_config`: currently stores GitHub token and should be replaced with safer server-side/session-only handling.
+- `jobfit_client_session`: opaque client-side demo fallback key sent as `X-JobFit-Client-Session`.
+- `jobfit_github_config`: stores repository/username metadata only; GitHub PATs are not persisted and are sent only for validation/push requests.
 
 ## 4. Core API Surface
 
@@ -69,6 +70,7 @@ Known risk: these stores are process-local, unbounded or lightly bounded, and lo
 ## 5. Security Constraints
 
 - Mask resume/user PII before sending data to LLM or external APIs.
+- Shared helper: `server/app/services/pii.py` masks emails and phone numbers in text/JSON-like payloads before LLM prompts.
 - Do not log raw PII, API keys, JWT secrets, OAuth tokens, or GitHub tokens.
 - Keep SSRF defenses in JD scraping code.
 - Do not commit `.env`, API keys, tokens, or credential files.

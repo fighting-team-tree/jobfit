@@ -5,11 +5,13 @@ User profile CRUD operations with server-side persistence.
 """
 
 from app.core.auth import get_optional_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.db_models import UserProfile
 from app.models.user import OptionalUser, ReplitUser
+from app.services.in_memory_store import ExpiringStore
 from app.services.user_service import get_or_create_user
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +20,10 @@ router = APIRouter()
 
 
 # ============ In-Memory Fallback Storage ============
-profiles_store: dict = {}
+profiles_store: ExpiringStore[str, dict] = ExpiringStore(
+    ttl_seconds=60 * 60 * 6,
+    max_size=500,
+)
 
 
 # ============ Request/Response Models ============
@@ -57,6 +62,25 @@ def use_database(db: AsyncSession | None, user: OptionalUser) -> bool:
     return db is not None and user.is_authenticated
 
 
+def get_fallback_user_id(request: Request, user: OptionalUser) -> str:
+    """Return an isolated fallback key for non-database demo mode."""
+    if settings.ENVIRONMENT.lower() in {"production", "prod"}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is required for profile persistence in production.",
+        )
+    if user.is_authenticated and user.user_id:
+        return user.user_id
+
+    session_id = request.headers.get("x-jobfit-client-session")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Client session header is required for demo profile storage.",
+        )
+    return f"demo:{session_id}"
+
+
 def profile_model_to_response(profile: UserProfile, user_id: str) -> ProfileResponse:
     """Convert SQLAlchemy model to Pydantic response."""
     return ProfileResponse(
@@ -88,6 +112,7 @@ def profile_dict_to_response(profile: dict, user_id: str) -> ProfileResponse:
 
 @router.get("/me", response_model=ProfileResponse)
 async def get_my_profile(
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ):
@@ -117,7 +142,7 @@ async def get_my_profile(
         return profile_model_to_response(user_profile, user.user_id)
 
     # Fallback: In-memory mode
-    user_id = user.user_id if user.is_authenticated else "anonymous"
+    user_id = get_fallback_user_id(request, user)
     profile = profiles_store.get(user_id, {})
     return profile_dict_to_response(profile, user_id)
 
@@ -125,6 +150,7 @@ async def get_my_profile(
 @router.put("/me", response_model=ProfileResponse)
 async def save_my_profile(
     data: ProfileSaveRequest,
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ):
@@ -168,7 +194,7 @@ async def save_my_profile(
         return profile_model_to_response(user_profile, user.user_id)
 
     # Fallback: In-memory mode
-    user_id = user.user_id if user.is_authenticated else "anonymous"
+    user_id = get_fallback_user_id(request, user)
 
     if user_id not in profiles_store:
         profiles_store[user_id] = {}

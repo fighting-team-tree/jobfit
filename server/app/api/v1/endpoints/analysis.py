@@ -11,7 +11,7 @@ from app.services.jd_scraper_service import jd_scraper_service
 from app.services.llm_service import llm_service
 from app.services.resume_parser_service import resume_parser_service
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 router = APIRouter()
 
@@ -89,12 +89,12 @@ class ProfileProject(BaseModel):
 class ProfileStructured(BaseModel):
     name: str | None = None
     contact: ProfileContact | None = None
-    skills: list[str] = []
-    experience: list[ProfileExperience] = []
-    education: list[ProfileEducation] = []
-    projects: list[ProfileProject] = []
-    certifications: list[str] = []
-    awards: list[str] = []
+    skills: list[str] = Field(default_factory=list)
+    experience: list[ProfileExperience] = Field(default_factory=list)
+    education: list[ProfileEducation] = Field(default_factory=list)
+    projects: list[ProfileProject] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
+    awards: list[str] = Field(default_factory=list)
 
 
 class ResumeAnalysisResponse(ProfileStructured):
@@ -126,11 +126,11 @@ class GapAnalysisResponse(BaseModel):
     """Gap analysis response."""
 
     match_score: float = 0  # Changed from int to float
-    matching_skills: list[str] = []
-    missing_skills: list[str] = []
-    recommendations: list[str] = []
-    strengths: list[str] = []
-    areas_to_improve: list[str] = []
+    matching_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    areas_to_improve: list[str] = Field(default_factory=list)
     # New detailed fields (optional)
     jd_analysis: dict | None = None
     profile_skills: list[str] | None = None
@@ -148,9 +148,9 @@ class GitHubRepoSummary(BaseModel):
 
 
 class GitHubDependencies(BaseModel):
-    python: list[str] = []
-    javascript: list[str] = []
-    other: list[str] = []
+    python: list[str] = Field(default_factory=list)
+    javascript: list[str] = Field(default_factory=list)
+    other: list[str] = Field(default_factory=list)
 
 
 class GitHubAnalysisResponse(BaseModel):
@@ -160,15 +160,15 @@ class GitHubAnalysisResponse(BaseModel):
     description: str | None = None
     stars: int | None = None
     total_repos: int | None = None
-    repos_analyzed: list[GitHubRepoSummary] = []
-    languages: dict[str, float] = {}
-    dependencies: GitHubDependencies = GitHubDependencies()
-    topics: list[str] = []
+    repos_analyzed: list[GitHubRepoSummary] = Field(default_factory=list)
+    languages: dict[str, float] = Field(default_factory=dict)
+    dependencies: GitHubDependencies = Field(default_factory=GitHubDependencies)
+    topics: list[str] = Field(default_factory=list)
     primary_language: str | None = None
-    frameworks: list[str] = []
+    frameworks: list[str] = Field(default_factory=list)
     skill_level: str | None = None
-    skills_identified: list[str] = []
-    code_patterns: list[str] = []
+    skills_identified: list[str] = Field(default_factory=list)
+    code_patterns: list[str] = Field(default_factory=list)
     summary: str | None = None
 
 

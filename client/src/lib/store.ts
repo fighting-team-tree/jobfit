@@ -159,15 +159,17 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'jobfit-profile',
-      // Don't persist file objects or sync state
+      version: 2,
+      migrate: (persisted) => {
+        const state = persisted as Partial<ProfileState> | undefined;
+        return {
+          ...initialProfileState,
+          githubUrl: state?.githubUrl || '',
+        };
+      },
+      // Keep PII-heavy profile/JD/resume data in memory/server only.
       partialize: (state) => ({
-        resumeText: state.resumeText,
         githubUrl: state.githubUrl,
-        jdText: state.jdText,
-        profile: state.profile,
-        resumeFileResult: state.resumeFileResult,
-        githubAnalysis: state.githubAnalysis,
-        gapAnalysis: state.gapAnalysis,
       }),
     }
   )

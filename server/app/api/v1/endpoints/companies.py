@@ -10,12 +10,14 @@ from datetime import datetime
 from typing import Literal
 
 from app.core.auth import get_optional_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.db_models import Company as CompanyModel
 from app.models.user import OptionalUser, ReplitUser
+from app.services.in_memory_store import ExpiringStore
 from app.services.user_service import get_or_create_user
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +25,10 @@ router = APIRouter()
 
 
 # ============ Fallback In-Memory Storage (when DB not configured) ============
-companies_store: dict = {}
+companies_store: ExpiringStore[str, dict] = ExpiringStore(
+    ttl_seconds=60 * 60 * 6,
+    max_size=500,
+)
 
 
 # ============ Request/Response Models ============
@@ -49,10 +54,10 @@ class MatchResultResponse(BaseModel):
     """Match analysis result."""
 
     match_score: float = 0
-    matching_skills: list[str] = []
-    missing_skills: list[str] = []
-    strengths: list[str] = []
-    recommendations: list[str] = []
+    matching_skills: list[str] = Field(default_factory=list)
+    missing_skills: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
     jd_analysis: dict | None = None
     score_breakdown: dict | None = None
 
@@ -74,11 +79,11 @@ class CompanyResponse(BaseModel):
 class ProfileForAnalysis(BaseModel):
     """User profile for analysis."""
 
-    skills: list[str] = []
-    experience: list[dict] = []
-    education: list[dict] = []
-    projects: list[dict] = []
-    certifications: list[str] = []
+    skills: list[str] = Field(default_factory=list)
+    experience: list[dict] = Field(default_factory=list)
+    education: list[dict] = Field(default_factory=list)
+    projects: list[dict] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
 
 
 class AnalyzeRequest(BaseModel):
@@ -117,11 +122,39 @@ def use_database(db: AsyncSession | None, user: OptionalUser) -> bool:
     return db is not None and user.is_authenticated
 
 
+def get_fallback_user_id(request: Request, user: OptionalUser) -> str:
+    """Return an isolated fallback key for non-database demo mode."""
+    if settings.ENVIRONMENT.lower() in {"production", "prod"}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is required for company persistence in production.",
+        )
+    if user.is_authenticated and user.user_id:
+        return user.user_id
+
+    session_id = request.headers.get("x-jobfit-client-session")
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Client session header is required for demo company storage.",
+        )
+    return f"demo:{session_id}"
+
+
+def get_fallback_company(company_id: str, fallback_user_id: str) -> dict:
+    """Get a fallback company only if it belongs to the current demo user."""
+    company = companies_store.get(company_id)
+    if not company or company.get("owner_id") != fallback_user_id:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return company
+
+
 # ============ API Endpoints ============
 
 
 @router.get("/")
 async def list_companies(
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> list[CompanyResponse]:
@@ -142,12 +175,18 @@ async def list_companies(
         return [company_model_to_response(c) for c in companies]
 
     # Fallback: In-memory mode
-    return [company_dict_to_response(c) for c in companies_store.values()]
+    fallback_user_id = get_fallback_user_id(request, user)
+    return [
+        company_dict_to_response(c)
+        for c in companies_store.values()
+        if c.get("owner_id") == fallback_user_id
+    ]
 
 
 @router.post("/", response_model=CompanyResponse)
 async def create_company(
     request: CompanyCreate,
+    http_request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
@@ -182,8 +221,10 @@ async def create_company(
         return company_model_to_response(company)
 
     # Fallback: In-memory mode
+    fallback_user_id = get_fallback_user_id(http_request, user)
     company = {
         "id": company_id,
+        "owner_id": fallback_user_id,
         "name": request.name,
         "jd_text": request.jd_text,
         "jd_url": request.jd_url,
@@ -200,6 +241,7 @@ async def create_company(
 @router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(
     company_id: str,
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
@@ -219,16 +261,15 @@ async def get_company(
         return company_model_to_response(company)
 
     # Fallback: In-memory mode
-    if company_id not in companies_store:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    return company_dict_to_response(companies_store[company_id])
+    fallback_user_id = get_fallback_user_id(request, user)
+    return company_dict_to_response(get_fallback_company(company_id, fallback_user_id))
 
 
 @router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(
     company_id: str,
     request: CompanyUpdate,
+    http_request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
@@ -266,10 +307,8 @@ async def update_company(
         return company_model_to_response(company)
 
     # Fallback: In-memory mode
-    if company_id not in companies_store:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-    company = companies_store[company_id]
+    fallback_user_id = get_fallback_user_id(http_request, user)
+    company = get_fallback_company(company_id, fallback_user_id)
 
     if request.name is not None:
         company["name"] = request.name
@@ -288,6 +327,7 @@ async def update_company(
 @router.delete("/{company_id}")
 async def delete_company(
     company_id: str,
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ):
@@ -310,9 +350,8 @@ async def delete_company(
         return {"message": "Company deleted successfully"}
 
     # Fallback: In-memory mode
-    if company_id not in companies_store:
-        raise HTTPException(status_code=404, detail="Company not found")
-
+    fallback_user_id = get_fallback_user_id(request, user)
+    get_fallback_company(company_id, fallback_user_id)
     del companies_store[company_id]
     return {"message": "Company deleted successfully"}
 
@@ -321,6 +360,7 @@ async def delete_company(
 async def analyze_company_match(
     company_id: str,
     request: AnalyzeRequest,
+    http_request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
@@ -360,10 +400,8 @@ async def analyze_company_match(
         await db.commit()
     else:
         # In-memory mode
-        if company_id not in companies_store:
-            raise HTTPException(status_code=404, detail="Company not found")
-
-        company_dict = companies_store[company_id]
+        fallback_user_id = get_fallback_user_id(http_request, user)
+        company_dict = get_fallback_company(company_id, fallback_user_id)
 
         if not company_dict.get("jd_text"):
             raise HTTPException(
@@ -435,6 +473,7 @@ async def analyze_company_match(
 @router.post("/{company_id}/scrape-jd")
 async def scrape_company_jd(
     company_id: str,
+    request: Request,
     user: OptionalUser = Depends(get_optional_user),
     db: AsyncSession | None = Depends(get_db),
 ) -> CompanyResponse:
@@ -465,10 +504,8 @@ async def scrape_company_jd(
 
         jd_url = company.jd_url
     else:
-        if company_id not in companies_store:
-            raise HTTPException(status_code=404, detail="Company not found")
-
-        company_dict = companies_store[company_id]
+        fallback_user_id = get_fallback_user_id(request, user)
+        company_dict = get_fallback_company(company_id, fallback_user_id)
 
         if not company_dict.get("jd_url"):
             raise HTTPException(
