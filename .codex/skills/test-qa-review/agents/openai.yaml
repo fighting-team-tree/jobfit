@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test QA Review"
+  short_description: "Review JobFit QA coverage and gates."
+  default_prompt: "Review the JobFit test and QA strategy and propose coverage improvements."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Pipeline Review"
+  short_description: "Review JobFit AI pipeline reliability."
+  default_prompt: "Review the JobFit AI pipeline for correctness, reliability, and evaluation gaps."

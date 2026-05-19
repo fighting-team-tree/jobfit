@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend Product Review"
+  short_description: "Review JobFit frontend flows, UX states, and product trust."
+  default_prompt: "Review the JobFit frontend product experience and identify UX and trust gaps."

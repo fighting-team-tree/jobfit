@@ -99,8 +99,13 @@ Refs: #이슈번호 (선택)
 ├── README.md                  # Codex 구조와 사용법
 ├── rules/                     # 프로젝트 규칙
 ├── skills/                    # Codex skill 진입점
+│   ├── ai-pipeline-review/
+│   ├── architecture-review/
+│   ├── frontend-product-review/
 │   ├── git-convention/
-│   └── jobfit-development/
+│   ├── jobfit-development/
+│   ├── security-privacy-review/
+│   └── test-qa-review/
 └── prompts/                   # 반복 작업용 Codex prompt 템플릿
 ```
 

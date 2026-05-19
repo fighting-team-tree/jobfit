@@ -27,6 +27,11 @@
   - Bounded WebSocket audio buffering with oldest-chunk drop behavior and reliable stop-sentinel enqueueing.
   - Added TTL/cap migrations for browser interview history and generated problem caches; persisted interview summaries are stripped.
 
+
+- **Codex Review Skills:**
+  - Added repo-local `.codex/skills` for architecture, security/privacy, AI pipeline, frontend product, and test/QA review.
+  - Updated `.codex/README.md` and `AGENTS.md` so future Codex runs can discover the expanded review skill set.
+
 ## Next Steps
 - Do not rewrite already-pushed commit history unless explicitly requested; use the new validator to prevent future misses.
 - Remaining risk: runtime stores and browser caches are now bounded, but production durability still needs DB/Redis/object storage rather than process memory/localStorage.

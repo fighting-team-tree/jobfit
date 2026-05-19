@@ -1,0 +1,4 @@
+interface:
+  display_name: "Security Privacy Review"
+  short_description: "Review JobFit security, PII handling, and external API risks."
+  default_prompt: "Review JobFit for security, privacy, secret-handling, and SSRF risks."

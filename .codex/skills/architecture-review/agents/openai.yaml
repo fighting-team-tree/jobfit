@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Review"
+  short_description: "Review JobFit architecture boundaries, flows, and risks."
+  default_prompt: "Review the JobFit architecture and identify structural risks, tradeoffs, and next actions."
