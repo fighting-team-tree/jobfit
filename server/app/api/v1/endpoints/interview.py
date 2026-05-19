@@ -7,6 +7,7 @@ Handles real-time mock interview via WebSocket with ElevenLabs TTS.
 import asyncio
 import base64
 import json
+from contextlib import suppress
 from datetime import UTC, datetime
 
 from app.core.config import settings
@@ -80,6 +81,31 @@ active_sessions: ExpiringStore[str, InterviewSession] = ExpiringStore(
     ttl_seconds=60 * 60 * 2,
     max_size=500,
 )
+MAX_AUDIO_QUEUE_CHUNKS = 64
+
+
+def _enqueue_audio_chunk(audio_queue: asyncio.Queue, chunk: bytes) -> bool:
+    """Queue a real-time audio chunk without allowing unbounded memory growth."""
+    if audio_queue.full():
+        with suppress(asyncio.QueueEmpty):
+            audio_queue.get_nowait()
+
+    try:
+        audio_queue.put_nowait(chunk)
+        return True
+    except asyncio.QueueFull:
+        return False
+
+
+def _enqueue_audio_stop(audio_queue: asyncio.Queue) -> None:
+    """Ensure the STT audio generator receives a stop sentinel even if full."""
+    while True:
+        try:
+            audio_queue.put_nowait(None)
+            return
+        except asyncio.QueueFull:
+            with suppress(asyncio.QueueEmpty):
+                audio_queue.get_nowait()
 
 
 def _compute_time_analysis(conversation: list[dict]) -> dict:
@@ -474,7 +500,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
 
     from app.services.stt_service import stt_service
 
-    audio_queue = asyncio.Queue()
+    audio_queue = asyncio.Queue(maxsize=MAX_AUDIO_QUEUE_CHUNKS)
     current_transcript: list[str] = []
     is_ai_speaking = False
     interrupt_event = asyncio.Event()
@@ -609,7 +635,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                 message = await websocket.receive()
 
                 if "bytes" in message:
-                    await audio_queue.put(message["bytes"])
+                    _enqueue_audio_chunk(audio_queue, message["bytes"])
 
                 elif "text" in message:
                     try:
@@ -624,7 +650,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
         except Exception as e:
             print(f"WS Receiver Error: {e}")
         finally:
-            await audio_queue.put(None)
+            _enqueue_audio_stop(audio_queue)
 
     # --- Start Execution ---
 

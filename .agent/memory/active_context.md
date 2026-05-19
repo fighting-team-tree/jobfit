@@ -24,9 +24,11 @@
   - Reduced `jobfit-profile` persistence to non-PII GitHub URL metadata only; resume/JD/profile/analysis data stays in memory/server sync.
   - Added `ExpiringStore` TTL/LRU behavior for demo profile/company stores, interview sessions, and roadmap/problem fallback stores.
   - Changed embedding cache to hashed keys with TTL/LRU eviction so raw resume/JD text is not retained as cache keys.
+  - Bounded WebSocket audio buffering with oldest-chunk drop behavior and reliable stop-sentinel enqueueing.
+  - Added TTL/cap migrations for browser interview history and generated problem caches; persisted interview summaries are stripped.
 
 ## Next Steps
 - Do not rewrite already-pushed commit history unless explicitly requested; use the new validator to prevent future misses.
-- Remaining risk: `jobfit-interview-history` and `jobfit-problems` still use browser localStorage; consider TTL/migration if those contents become sensitive.
-- Remaining risk: WebSocket `audio_queue` is still unbounded; consider a bounded queue/drop policy before production load testing.
+- Remaining risk: runtime stores and browser caches are now bounded, but production durability still needs DB/Redis/object storage rather than process memory/localStorage.
+- Remaining risk: `jobfit_github_config` keeps non-secret repo metadata in localStorage; consider server-side config if repo metadata becomes sensitive.
 - Run normal validation (`make lint`, `make test`, frontend lint/build) when source behavior changes, not for documentation-only updates unless needed.

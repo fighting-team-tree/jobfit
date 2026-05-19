@@ -259,6 +259,28 @@ export interface InterviewHistoryEntry {
   feedbackSummary?: string;
 }
 
+const INTERVIEW_HISTORY_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+const MAX_PERSISTED_INTERVIEW_HISTORY = 25;
+
+const isWithinTtl = (timestamp: number, ttlMs: number, now = Date.now()) =>
+  Number.isFinite(timestamp) && timestamp > 0 && now - timestamp <= ttlMs;
+
+const sanitizeInterviewHistoryEntries = (entries: InterviewHistoryEntry[] = [], now = Date.now()) =>
+  entries
+    .filter((entry) => isWithinTtl(Date.parse(entry.date), INTERVIEW_HISTORY_TTL_MS, now))
+    .map((entry) => ({
+      id: entry.id,
+      sessionId: entry.sessionId,
+      date: entry.date,
+      interviewType: entry.interviewType,
+      persona: entry.persona,
+      scores: entry.scores,
+      totalQuestions: entry.totalQuestions,
+      durationSeconds: entry.durationSeconds,
+      companyName: entry.companyName,
+    }))
+    .slice(0, MAX_PERSISTED_INTERVIEW_HISTORY);
+
 interface InterviewHistoryState {
   entries: InterviewHistoryEntry[];
   addEntry: (entry: InterviewHistoryEntry) => void;
@@ -273,19 +295,33 @@ export const useInterviewHistoryStore = create<InterviewHistoryState>()(
 
       addEntry: (entry) =>
         set((state) => {
+          const freshEntries = sanitizeInterviewHistoryEntries(state.entries);
           // 중복 방지: 같은 sessionId가 이미 있으면 추가하지 않음
-          if (state.entries.some((e) => e.sessionId === entry.sessionId)) {
-            return state;
+          if (freshEntries.some((e) => e.sessionId === entry.sessionId)) {
+            return { entries: freshEntries };
           }
-          return { entries: [entry, ...state.entries].slice(0, 50) }; // 최대 50개 보관
+          return { entries: sanitizeInterviewHistoryEntries([entry, ...freshEntries]) };
         }),
 
-      getEntries: () => get().entries,
+      getEntries: () => sanitizeInterviewHistoryEntries(get().entries),
 
       clearHistory: () => set({ entries: [] }),
     }),
     {
       name: 'jobfit-interview-history',
+      version: 2,
+      migrate: (persisted) => {
+        const state = persisted as Partial<InterviewHistoryState> | undefined;
+        return { entries: sanitizeInterviewHistoryEntries(state?.entries || []) };
+      },
+      partialize: (state) => ({
+        entries: sanitizeInterviewHistoryEntries(state.entries),
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.entries = sanitizeInterviewHistoryEntries(state.entries);
+        }
+      },
     }
   )
 );
@@ -295,6 +331,7 @@ export const useInterviewHistoryStore = create<InterviewHistoryState>()(
 interface ProblemState {
   // 주차별 문제 저장
   weekProblems: Record<number, Problem[]>;
+  weekProblemCachedAt: Record<number, number>;
 
   // Actions
   setWeekProblems: (weekNumber: number, problems: Problem[]) => void;
@@ -303,41 +340,95 @@ interface ProblemState {
   clearAllProblems: () => void;
 }
 
+const PROBLEM_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+const MAX_PERSISTED_PROBLEM_WEEKS = 12;
+const MAX_PROBLEMS_PER_WEEK = 20;
+
+const sanitizeProblemCache = (
+  weekProblems: Record<number, Problem[]> = {},
+  weekProblemCachedAt: Record<number, number> = {},
+  now = Date.now()
+) => {
+  const sortedWeeks = Object.keys(weekProblems)
+    .map(Number)
+    .filter((weekNumber) => Number.isInteger(weekNumber))
+    .filter((weekNumber) => isWithinTtl(weekProblemCachedAt[weekNumber], PROBLEM_CACHE_TTL_MS, now))
+    .sort((a, b) => (weekProblemCachedAt[b] || 0) - (weekProblemCachedAt[a] || 0))
+    .slice(0, MAX_PERSISTED_PROBLEM_WEEKS);
+
+  return sortedWeeks.reduce(
+    (acc, weekNumber) => {
+      acc.weekProblems[weekNumber] = (weekProblems[weekNumber] || []).slice(0, MAX_PROBLEMS_PER_WEEK);
+      acc.weekProblemCachedAt[weekNumber] = weekProblemCachedAt[weekNumber];
+      return acc;
+    },
+    { weekProblems: {} as Record<number, Problem[]>, weekProblemCachedAt: {} as Record<number, number> }
+  );
+};
+
 export const useProblemStore = create<ProblemState>()(
   persist(
     (set) => ({
       weekProblems: {},
+      weekProblemCachedAt: {},
 
       setWeekProblems: (weekNumber, problems) =>
-        set((state) => ({
-          weekProblems: {
-            ...state.weekProblems,
-            [weekNumber]: problems,
-          },
-        })),
+        set((state) =>
+          sanitizeProblemCache(
+            {
+              ...state.weekProblems,
+              [weekNumber]: problems,
+            },
+            {
+              ...state.weekProblemCachedAt,
+              [weekNumber]: Date.now(),
+            }
+          )
+        ),
 
       addProblems: (weekNumber, problems) =>
-        set((state) => ({
-          weekProblems: {
-            ...state.weekProblems,
-            [weekNumber]: [
-              ...(state.weekProblems[weekNumber] || []),
-              ...problems,
-            ],
-          },
-        })),
+        set((state) =>
+          sanitizeProblemCache(
+            {
+              ...state.weekProblems,
+              [weekNumber]: [
+                ...(state.weekProblems[weekNumber] || []),
+                ...problems,
+              ],
+            },
+            {
+              ...state.weekProblemCachedAt,
+              [weekNumber]: Date.now(),
+            }
+          )
+        ),
 
       clearWeekProblems: (weekNumber) =>
         set((state) => {
           const newWeekProblems = { ...state.weekProblems };
+          const newWeekProblemCachedAt = { ...state.weekProblemCachedAt };
           delete newWeekProblems[weekNumber];
-          return { weekProblems: newWeekProblems };
+          delete newWeekProblemCachedAt[weekNumber];
+          return { weekProblems: newWeekProblems, weekProblemCachedAt: newWeekProblemCachedAt };
         }),
 
-      clearAllProblems: () => set({ weekProblems: {} }),
+      clearAllProblems: () => set({ weekProblems: {}, weekProblemCachedAt: {} }),
     }),
     {
       name: 'jobfit-problems',
+      version: 2,
+      migrate: (persisted) => {
+        const state = persisted as Partial<ProblemState> | undefined;
+        return sanitizeProblemCache(state?.weekProblems || {}, state?.weekProblemCachedAt || {});
+      },
+      partialize: (state) => sanitizeProblemCache(state.weekProblems, state.weekProblemCachedAt),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          const sanitized = sanitizeProblemCache(state.weekProblems, state.weekProblemCachedAt);
+          state.weekProblems = sanitized.weekProblems;
+          state.weekProblemCachedAt = sanitized.weekProblemCachedAt;
+        }
+      },
     }
   )
 );

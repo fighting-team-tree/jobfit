@@ -52,8 +52,8 @@ Known risk: these stores are still process-local and lost on restart. Profile/co
 ### Frontend persistence
 - `jobfit-profile`: only non-PII GitHub URL metadata; legacy persisted resume/JD/profile data is stripped by the v2 Zustand migration.
 - `jobfit-auth` and `jobfit_access_token`: auth state/token. `jobfit_access_token` now uses `sessionStorage` and removes legacy `localStorage` copies.
-- `jobfit-interview-history`: recent feedback summaries, capped at 50 entries.
-- `jobfit-problems`: generated problem cache.
+- `jobfit-interview-history`: recent interview score metadata only; persisted entries are stripped of feedback summaries, capped at 25, and TTL-pruned after 14 days.
+- `jobfit-problems`: generated problem cache with persisted cache timestamps, 24-hour TTL, 12-week cap, and 20-problem-per-week cap.
 - `jobfit_client_session`: opaque client-side demo fallback key sent as `X-JobFit-Client-Session`.
 - `jobfit_github_config`: stores repository/username metadata only; GitHub PATs are not persisted and are sent only for validation/push requests.
 
@@ -63,7 +63,7 @@ Known risk: these stores are still process-local and lost on restart. Profile/co
 - `/api/v1/analyze`: resume, GitHub, JD, and gap analysis.
 - `/api/v1/profile`: authenticated DB profile or demo memory fallback.
 - `/api/v1/companies`: company/JD tabs and match analysis.
-- `/api/v1/interview`: REST and WebSocket interview flows.
+- `/api/v1/interview`: REST and WebSocket interview flows; WebSocket audio input uses a bounded queue with oldest-chunk drop and stop-sentinel handling.
 - `/api/v1/roadmap`: roadmap, generated problems, and evaluation.
 - `/api/v1/git`: GitHub token validation, repo listing, and push helpers.
 

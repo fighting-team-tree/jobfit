@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -10,6 +11,11 @@ import numpy as np
 SERVER_DIR = Path(__file__).resolve().parents[1] / "server"
 sys.path.insert(0, str(SERVER_DIR))
 
+from app.api.v1.endpoints.interview import (  # noqa: E402
+    MAX_AUDIO_QUEUE_CHUNKS,
+    _enqueue_audio_chunk,
+    _enqueue_audio_stop,
+)
 from app.services.embedding_service import EmbeddingService  # noqa: E402
 from app.services.in_memory_store import ExpiringStore  # noqa: E402
 
@@ -60,3 +66,26 @@ def test_embedding_cache_uses_hashed_keys_and_ttl_lru(monkeypatch):
     service._set_cached(service._cache_key(raw_text), vector)
     now = 1011.0
     assert service._get_cached(service._cache_key(raw_text)) is None
+
+
+def test_interview_audio_queue_drops_oldest_chunks_and_keeps_stop_sentinel():
+    queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=MAX_AUDIO_QUEUE_CHUNKS)
+
+    for index in range(MAX_AUDIO_QUEUE_CHUNKS + 5):
+        assert _enqueue_audio_chunk(queue, f"chunk-{index}".encode())
+
+    assert queue.qsize() == MAX_AUDIO_QUEUE_CHUNKS
+    assert queue.get_nowait() == b"chunk-5"
+
+    for index in range(5):
+        _enqueue_audio_chunk(queue, f"tail-{index}".encode())
+
+    assert queue.full()
+    _enqueue_audio_stop(queue)
+    assert queue.full()
+
+    drained: list[bytes | None] = []
+    while not queue.empty():
+        drained.append(queue.get_nowait())
+
+    assert drained[-1] is None
