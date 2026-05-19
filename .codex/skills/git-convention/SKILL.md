@@ -1,3 +1,8 @@
+---
+name: git-convention
+description: JobFit 프로젝트의 커밋 메시지 작성, staged diff 검토, 커밋 단위 분리, 보안 패턴 점검에 사용합니다.
+---
+
 # Git Convention Skill - JobFit
 
 JobFit 프로젝트에서 커밋 메시지를 작성하거나 검토할 때 사용합니다.

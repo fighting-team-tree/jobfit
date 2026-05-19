@@ -1,3 +1,8 @@
+---
+name: jobfit-development
+description: JobFit의 FastAPI 백엔드, React/Vite 프론트엔드, 테스트/린트/빌드 검증, 문서 업데이트 작업에 사용합니다.
+---
+
 # JobFit Development Skill
 
 JobFit의 일반 개발, 수정, 검증 작업에 사용하는 Codex 스킬입니다.
