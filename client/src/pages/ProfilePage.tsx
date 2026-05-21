@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload, Github, FileText, Loader2, CheckCircle, ArrowRight, FileUp, X, Search, RotateCcw, Users, AlertCircle } from 'lucide-react';
-import { analysisAPI } from '../lib/api';
+import { analysisAPI, profileAPI, API_BASE_URL } from '../lib/api';
 import type { FixtureProfile } from '../lib/api';
 import { useProfileStore } from '../lib/store';
 
@@ -24,6 +24,34 @@ export default function ProfilePage() {
     const [githubError, setGithubError] = useState<string | null>(null);
     const [uploadMode, setUploadMode] = useState<'file' | 'text'>('file');
     const resetLockRef = useRef(false);
+
+    // Google Calendar & Discord Webhook states
+    const [googleConnected, setGoogleConnected] = useState(false);
+    const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+    const [isSavingWebhook, setIsSavingWebhook] = useState(false);
+    const [webhookMessage, setWebhookMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    useEffect(() => {
+        profileAPI.getMyProfile().then((res) => {
+            setGoogleConnected(!!res.google_connected);
+            setDiscordWebhookUrl(res.discord_webhook_url || '');
+        }).catch((err) => {
+            console.error('프로필 로드 실패', err);
+        });
+    }, []);
+
+    const handleSaveWebhook = async () => {
+        setIsSavingWebhook(true);
+        setWebhookMessage(null);
+        try {
+            await profileAPI.saveDiscordWebhook(discordWebhookUrl.trim() || null);
+            setWebhookMessage({ type: 'success', text: '디스코드 웹훅 URL이 성공적으로 저장되었습니다.' });
+        } catch (err) {
+            setWebhookMessage({ type: 'error', text: err instanceof Error ? err.message : '저장 실패' });
+        } finally {
+            setIsSavingWebhook(false);
+        }
+    };
 
     // TEST_MODE: fixture profiles
     const [testMode, setTestMode] = useState(false);
@@ -463,6 +491,88 @@ export default function ProfilePage() {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+
+                    {/* 외부 서비스 연동 설정 */}
+                    <div className="mt-8 p-6 rounded-2xl border border-white/10 bg-white/5">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center">
+                                <Users className="w-5 h-5 text-indigo-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold">외부 서비스 연동</h2>
+                                <p className="text-sm text-neutral-400">구글 캘린더와 디스코드 알림을 연동하여 학습 계획을 실시간으로 관리하세요.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {/* 구글 캘린더 연동 카드 */}
+                            <div className={`p-5 rounded-xl border ${googleConnected ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-white/5 bg-neutral-900/50'} transition-all`}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 font-bold">G</div>
+                                        <div>
+                                            <h3 className="text-sm font-semibold">Google Calendar</h3>
+                                            <p className="text-xs text-neutral-400">학습 일정을 캘린더에 동기화</p>
+                                        </div>
+                                    </div>
+                                    {googleConnected ? (
+                                        <span className="px-2.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-xs font-medium">연동 완료</span>
+                                    ) : (
+                                        <span className="px-2.5 py-0.5 bg-neutral-800 text-neutral-400 rounded-full text-xs font-medium">미연동</span>
+                                    )}
+                                </div>
+                                <a
+                                    href={`${API_BASE_URL}/auth/login/google`}
+                                    className={`w-full py-2.5 px-4 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                                        googleConnected
+                                            ? 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                    }`}
+                                >
+                                    {googleConnected ? '계정 재연동' : 'Google 계정 연동하기'}
+                                </a>
+                            </div>
+
+                            {/* 디스코드 웹훅 연동 카드 */}
+                            <div className={`p-5 rounded-xl border ${discordWebhookUrl ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-white/5 bg-neutral-900/50'} transition-all`}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 font-bold">D</div>
+                                        <div>
+                                            <h3 className="text-sm font-semibold">Discord 알림</h3>
+                                            <p className="text-xs text-neutral-400">주차별 학습 계획 웹훅 전송</p>
+                                        </div>
+                                    </div>
+                                    {discordWebhookUrl ? (
+                                        <span className="px-2.5 py-0.5 bg-indigo-500/15 text-indigo-400 rounded-full text-xs font-medium">설정 완료</span>
+                                    ) : (
+                                        <span className="px-2.5 py-0.5 bg-neutral-800 text-neutral-400 rounded-full text-xs font-medium">미설정</span>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="https://discord.com/api/webhooks/..."
+                                        value={discordWebhookUrl}
+                                        onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                                        className="w-full px-3 py-2 bg-neutral-950 border border-white/10 rounded-lg text-xs focus:outline-none focus:border-indigo-500 placeholder:text-neutral-700 text-neutral-300"
+                                    />
+                                    <button
+                                        onClick={handleSaveWebhook}
+                                        disabled={isSavingWebhook}
+                                        className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 disabled:bg-neutral-900 text-neutral-200 rounded-lg text-xs font-medium transition-colors"
+                                    >
+                                        {isSavingWebhook ? '저장 중...' : '웹훅 URL 저장'}
+                                    </button>
+                                </div>
+                                {webhookMessage && (
+                                    <p className={`mt-2 text-xs ${webhookMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {webhookMessage.text}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     </div>
 

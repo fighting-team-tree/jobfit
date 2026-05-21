@@ -7,7 +7,7 @@ User profile CRUD operations with server-side persistence.
 from app.core.auth import get_optional_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.db_models import UserProfile
+from app.models.db_models import User, UserProfile
 from app.models.user import OptionalUser, ReplitUser
 from app.services.in_memory_store import ExpiringStore
 from app.services.user_service import get_or_create_user
@@ -50,8 +50,16 @@ class ProfileResponse(BaseModel):
     gap_analysis: dict | None = None
     jd_text: str | None = None
     github_url: str | None = None
+    google_connected: bool = False
+    discord_webhook_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DiscordWebhookRequest(BaseModel):
+    """Request body for saving Discord Webhook URL."""
+
+    discord_webhook_url: str | None = None
 
 
 # ============ Helper Functions ============
@@ -81,16 +89,18 @@ def get_fallback_user_id(request: Request, user: OptionalUser) -> str:
     return f"demo:{session_id}"
 
 
-def profile_model_to_response(profile: UserProfile, user_id: str) -> ProfileResponse:
+def profile_model_to_response(profile: UserProfile, db_user: User | None) -> ProfileResponse:
     """Convert SQLAlchemy model to Pydantic response."""
     return ProfileResponse(
-        user_id=user_id,
+        user_id=profile.user_id,
         profile_data=profile.profile_data,
         resume_file_result=profile.resume_file_result,
         github_analysis=profile.github_analysis,
         gap_analysis=profile.gap_analysis,
         jd_text=profile.jd_text,
         github_url=profile.github_url,
+        google_connected=db_user is not None and db_user.google_refresh_token is not None,
+        discord_webhook_url=db_user.discord_webhook_url if db_user else None,
     )
 
 
@@ -104,6 +114,8 @@ def profile_dict_to_response(profile: dict, user_id: str) -> ProfileResponse:
         gap_analysis=profile.get("gap_analysis"),
         jd_text=profile.get("jd_text"),
         github_url=profile.get("github_url"),
+        google_connected=profile.get("google_connected", False),
+        discord_webhook_url=profile.get("discord_webhook_url"),
     )
 
 
@@ -124,6 +136,10 @@ async def get_my_profile(
     """
     # Database mode
     if use_database(db, user):
+        user_query = select(User).where(User.id == user.user_id)
+        user_res = await db.execute(user_query)
+        db_user = user_res.scalar_one_or_none()
+
         result = await db.execute(select(UserProfile).where(UserProfile.user_id == user.user_id))
         user_profile = result.scalar_one_or_none()
 
@@ -137,9 +153,11 @@ async def get_my_profile(
                 gap_analysis=None,
                 jd_text=None,
                 github_url=None,
+                google_connected=db_user is not None and db_user.google_refresh_token is not None,
+                discord_webhook_url=db_user.discord_webhook_url if db_user else None,
             )
 
-        return profile_model_to_response(user_profile, user.user_id)
+        return profile_model_to_response(user_profile, db_user)
 
     # Fallback: In-memory mode
     user_id = get_fallback_user_id(request, user)
@@ -164,7 +182,7 @@ async def save_my_profile(
     if use_database(db, user):
         # Ensure user exists in DB
         replit_user = ReplitUser(user_id=user.user_id, username=user.username)
-        await get_or_create_user(db, replit_user)
+        db_user = await get_or_create_user(db, replit_user)
 
         # Get or create profile
         result = await db.execute(select(UserProfile).where(UserProfile.user_id == user.user_id))
@@ -191,7 +209,7 @@ async def save_my_profile(
         await db.commit()
         await db.refresh(user_profile)
 
-        return profile_model_to_response(user_profile, user.user_id)
+        return profile_model_to_response(user_profile, db_user)
 
     # Fallback: In-memory mode
     user_id = get_fallback_user_id(request, user)
@@ -216,3 +234,28 @@ async def save_my_profile(
         profile["github_url"] = data.github_url
 
     return profile_dict_to_response(profile, user_id)
+
+
+@router.put("/me/discord")
+async def save_discord_webhook(
+    data: DiscordWebhookRequest,
+    request: Request,
+    user: OptionalUser = Depends(get_optional_user),
+    db: AsyncSession | None = Depends(get_db),
+):
+    """
+    Save or update the user's Discord Webhook URL.
+    """
+    if use_database(db, user):
+        replit_user = ReplitUser(user_id=user.user_id, username=user.username)
+        db_user = await get_or_create_user(db, replit_user)
+        db_user.discord_webhook_url = data.discord_webhook_url
+        await db.commit()
+        return {"status": "success", "discord_webhook_url": db_user.discord_webhook_url}
+
+    # Demo fallback
+    user_id = get_fallback_user_id(request, user)
+    if user_id not in profiles_store:
+        profiles_store[user_id] = {}
+    profiles_store[user_id]["discord_webhook_url"] = data.discord_webhook_url
+    return {"status": "success", "discord_webhook_url": data.discord_webhook_url}

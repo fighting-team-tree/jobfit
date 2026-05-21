@@ -80,7 +80,12 @@ async def login_google():
         discovery = response.json()
         auth_endpoint = discovery.get("authorization_endpoint")
 
-    scopes = ["openid", "email", "profile"]
+    scopes = [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar.events",
+    ]
 
     query = urlencode(
         {
@@ -136,6 +141,8 @@ async def auth_google_callback(
             )
 
         access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token")
+        expires_in = token_data.get("expires_in")
         if not access_token:
             raise HTTPException(status_code=400, detail="OAuth access token missing")
 
@@ -166,10 +173,22 @@ async def auth_google_callback(
             db_user = User(
                 id=google_user_id,
                 username=name or (email.split("@")[0] if email else "Google User"),
+                google_access_token=access_token,
+                google_refresh_token=refresh_token,
+                google_token_expires_at=datetime.now(UTC) + timedelta(seconds=int(expires_in))
+                if expires_in
+                else None,
             )
             db.add(db_user)
         else:
             db_user.username = name or db_user.username
+            db_user.google_access_token = access_token
+            if refresh_token:
+                db_user.google_refresh_token = refresh_token
+            if expires_in:
+                db_user.google_token_expires_at = datetime.now(UTC) + timedelta(
+                    seconds=int(expires_in)
+                )
 
         await db.commit()
 

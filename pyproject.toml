@@ -33,6 +33,7 @@ dependencies = [
     "openai>=2.21.0",
     # Auth (JWT)
     "pyjwt>=2.8.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [build-system]

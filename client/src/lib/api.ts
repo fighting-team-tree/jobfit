@@ -4,7 +4,7 @@
 import { getAuthHeaders } from './authToken';
 
 // 배포 환경에서는 상대 경로 사용, 로컬 개발에서는 localhost:8000
-const API_BASE_URL = import.meta.env.VITE_API_URL ||
+export const API_BASE_URL = import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 // ============ Types ============
@@ -430,6 +430,7 @@ export interface WeeklyPlan {
 }
 
 export interface Roadmap {
+  id?: string;
   title: string;
   summary: string;
   total_estimated_hours: number;
@@ -468,6 +469,32 @@ export const roadmapAPI = {
       ...fetchOptions,
     });
     return handleResponse<RoadmapTodoCompleteResponse>(response);
+  },
+
+  /**
+   * Sync roadmap to Google Calendar
+   */
+  async syncCalendar(roadmapId: string, startDate: string): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/${roadmapId}/sync-calendar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ start_date: startDate }),
+      ...fetchOptions,
+    });
+    return handleResponse<{ status: string; message: string }>(response);
+  },
+
+  /**
+   * Send roadmap week notification to Discord Webhook
+   */
+  async notifyDiscord(roadmapId: string, weekNumber: number): Promise<{ status: string; message: string }> {
+    const response = await fetch(`${API_BASE_URL}/roadmap/${roadmapId}/notify-discord`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ week_number: weekNumber }),
+      ...fetchOptions,
+    });
+    return handleResponse<{ status: string; message: string }>(response);
   },
 };
 
@@ -580,6 +607,8 @@ export interface ProfileResponse {
   gap_analysis: GapAnalysis | null;
   jd_text: string | null;
   github_url: string | null;
+  google_connected?: boolean;
+  discord_webhook_url?: string | null;
 }
 
 export const profileAPI = {
@@ -606,6 +635,19 @@ export const profileAPI = {
       ...fetchOptions,
     });
     return handleResponse<ProfileResponse>(response);
+  },
+
+  /**
+   * Save user's Discord Webhook URL
+   */
+  async saveDiscordWebhook(discordWebhookUrl: string | null): Promise<{ status: string; discord_webhook_url: string | null }> {
+    const response = await fetch(`${API_BASE_URL}/profile/me/discord`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ discord_webhook_url: discordWebhookUrl }),
+      ...fetchOptions,
+    });
+    return handleResponse<{ status: string; discord_webhook_url: string | null }>(response);
   },
 };
 

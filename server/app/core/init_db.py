@@ -7,7 +7,7 @@ Creates tables on startup if they don't exist.
 from app.core.database import Base, engine, is_db_configured
 
 # Import all models to register them with Base
-from app.models.db_models import Company, InterviewSession, Roadmap, User  # noqa: F401
+from app.models.db_models import Company, InterviewSession, Roadmap, User, UserProfile  # noqa: F401
 
 _initialized = False
 

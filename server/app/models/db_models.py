@@ -27,6 +27,12 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
 
+    # Google OAuth & Notification settings
+    google_access_token = Column(String, nullable=True)
+    google_refresh_token = Column(String, nullable=True)
+    google_token_expires_at = Column(DateTime, nullable=True)
+    discord_webhook_url = Column(String, nullable=True)
+
     # Relationships
     companies = relationship("Company", back_populates="user", cascade="all, delete-orphan")
     roadmaps = relationship("Roadmap", back_populates="user", cascade="all, delete-orphan")

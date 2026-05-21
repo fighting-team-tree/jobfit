@@ -43,8 +43,8 @@ class Settings(BaseSettings):
     # GitHub API
     GITHUB_TOKEN: str = ""
 
-    # Database (Replit PostgreSQL)
-    DATABASE_URL: str = ""
+    # Database (Replit PostgreSQL / Local SQLite)
+    DATABASE_URL: str = "sqlite+aiosqlite:///./jobfit.db"
 
     # Auth & JWT
     JWT_SECRET_KEY: str = ""

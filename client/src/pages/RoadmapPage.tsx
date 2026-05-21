@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle, Code2, FileQuestion } from 'lucide-react';
-import { roadmapAPI, problemAPI, type Roadmap } from '../lib/api';
+import { BookOpen, CheckCircle, Clock, ExternalLink, ArrowLeft, Loader2, AlertCircle, Code2, FileQuestion, Calendar, Send } from 'lucide-react';
+import { roadmapAPI, problemAPI, profileAPI, type Roadmap } from '../lib/api';
 import { useProfileStore, useProblemStore } from '../lib/store';
 
 export default function RoadmapPage() {
@@ -16,6 +16,15 @@ export default function RoadmapPage() {
     const [generatingWeek, setGeneratingWeek] = useState<number | null>(null);
     const [weekErrors, setWeekErrors] = useState<Record<number, string>>({});
     const [showSolution, setShowSolution] = useState<Record<string, boolean>>({});
+
+    // Google Calendar & Discord state
+    const [googleConnected, setGoogleConnected] = useState(false);
+    const [discordWebhookSet, setDiscordWebhookSet] = useState(false);
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+    const [calendarSyncStatus, setCalendarSyncStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [sendingDiscordWeek, setSendingDiscordWeek] = useState<number | null>(null);
+    const [discordStatus, setDiscordStatus] = useState<Record<number, { type: 'success' | 'error', text: string } | null>>({});
 
     const completionRate = useMemo(() => {
         if (!roadmap || roadmap.weekly_plans.length === 0) return 0;
@@ -43,7 +52,57 @@ export default function RoadmapPage() {
         if (gapAnalysis) {
             generateRoadmap();
         }
+        profileAPI.getMyProfile().then((res) => {
+            setGoogleConnected(!!res.google_connected);
+            setDiscordWebhookSet(!!res.discord_webhook_url);
+        }).catch((err) => {
+            console.error('프로필 상태 확인 실패', err);
+        });
     }, [gapAnalysis, generateRoadmap]);
+
+    const handleSyncCalendar = async () => {
+        if (!roadmap?.id) {
+            setCalendarSyncStatus({ type: 'error', text: '로드맵이 아직 생성되지 않았거나 ID가 없습니다.' });
+            return;
+        }
+        if (!startDate) {
+            setCalendarSyncStatus({ type: 'error', text: '시작 날짜를 선택해주세요.' });
+            return;
+        }
+        setIsSyncingCalendar(true);
+        setCalendarSyncStatus(null);
+        try {
+            const res = await roadmapAPI.syncCalendar(roadmap.id, startDate);
+            setCalendarSyncStatus({ type: 'success', text: res.message || '구글 캘린더에 학습 일정이 성공적으로 등록되었습니다!' });
+        } catch (err) {
+            setCalendarSyncStatus({ type: 'error', text: err instanceof Error ? err.message : '캘린더 동기화 중 오류가 발생했습니다.' });
+        } finally {
+            setIsSyncingCalendar(false);
+        }
+    };
+
+    const handleNotifyDiscord = async (weekNumber: number) => {
+        if (!roadmap?.id) {
+            alert('로드맵 ID가 존재하지 않습니다.');
+            return;
+        }
+        setSendingDiscordWeek(weekNumber);
+        setDiscordStatus(prev => ({ ...prev, [weekNumber]: null }));
+        try {
+            const res = await roadmapAPI.notifyDiscord(roadmap.id, weekNumber);
+            setDiscordStatus(prev => ({
+                ...prev,
+                [weekNumber]: { type: 'success', text: res.message || '디스코드 전송 완료!' }
+            }));
+        } catch (err) {
+            setDiscordStatus(prev => ({
+                ...prev,
+                [weekNumber]: { type: 'error', text: err instanceof Error ? err.message : '전송 실패' }
+            }));
+        } finally {
+            setSendingDiscordWeek(null);
+        }
+    };
 
     const toggleTodo = async (todoId: number) => {
         const newCompleted = new Set(completedTodos);
@@ -152,7 +211,7 @@ export default function RoadmapPage() {
                     {roadmap && (
                         <>
                             {/* Stats Overview */}
-                            <div className="grid grid-cols-3 gap-4 mb-8">
+                            <div className="grid grid-cols-3 gap-4 mb-6">
                                 <div className="p-4 rounded-xl bg-white/5 border border-white/10">
                                     <p className="text-sm text-neutral-400">총 학습 시간</p>
                                     <p className="text-2xl font-bold">{roadmap.total_estimated_hours}시간</p>
@@ -169,20 +228,128 @@ export default function RoadmapPage() {
                                 </div>
                             </div>
 
+                            {/* Google Calendar Sync Panel */}
+                            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 mb-8">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                                            <Calendar className="w-5 h-5 text-red-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-semibold">Google Calendar 연동</h3>
+                                            <p className="text-xs text-neutral-400">
+                                                {googleConnected 
+                                                    ? '학습 시작일을 선택하고 캘린더에 전체 일정을 등록해보세요.'
+                                                    : '구글 캘린더에 일정을 동기화하려면 먼저 프로필에서 Google 계정을 연동해주세요.'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {googleConnected ? (
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-neutral-400 whitespace-nowrap">시작일:</span>
+                                                <input
+                                                    type="date"
+                                                    value={startDate}
+                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                    className="px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-red-500"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={handleSyncCalendar}
+                                                disabled={isSyncingCalendar}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-red-800 text-xs font-semibold rounded-lg text-white flex items-center justify-center gap-1.5 transition-colors disabled:cursor-not-allowed"
+                                            >
+                                                {isSyncingCalendar ? (
+                                                    <>
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        동기화 중...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                        캘린더에 등록
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <Link
+                                            to="/profile"
+                                            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold rounded-lg text-neutral-200 text-center transition-colors border border-white/10"
+                                        >
+                                            계정 연동하러 가기
+                                        </Link>
+                                    )}
+                                </div>
+                                {calendarSyncStatus && (
+                                    <div className={`text-xs mt-3 p-3 rounded-lg border ${
+                                        calendarSyncStatus.type === 'success' 
+                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                            : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                    }`}>
+                                        {calendarSyncStatus.text}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Weekly Plans */}
                             <div className="space-y-6">
                                 {roadmap.weekly_plans.map((week) => (
                                     <div key={week.week_number} className="p-6 rounded-2xl bg-white/5 border border-white/10">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <h3 className="text-lg font-semibold">Week {week.week_number}</h3>
-                                                <p className="text-sm text-neutral-400">{week.theme}</p>
+                                        <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+                                            <div className="flex-1 min-w-[200px]">
+                                                <div className="flex items-center gap-3 flex-wrap">
+                                                    <h3 className="text-lg font-semibold">Week {week.week_number}</h3>
+                                                    
+                                                    {discordWebhookSet ? (
+                                                        <button
+                                                            onClick={() => handleNotifyDiscord(week.week_number)}
+                                                            disabled={sendingDiscordWeek === week.week_number}
+                                                            className="px-2.5 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 disabled:opacity-50 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors"
+                                                        >
+                                                            {sendingDiscordWeek === week.week_number ? (
+                                                                <>
+                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    알림 전송 중...
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Send className="w-3 h-3" />
+                                                                    Discord 알림 전송
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <Link
+                                                            to="/profile"
+                                                            className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300 text-xs font-semibold rounded-lg flex items-center gap-1 transition-colors border border-white/5"
+                                                        >
+                                                            <Send className="w-3 h-3" />
+                                                            Discord 연동 필요
+                                                        </Link>
+                                                    )}
+                                                </div>
+                                                <p className="text-sm text-neutral-400 mt-1">{week.theme}</p>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-neutral-400">
-                                                <Clock className="w-4 h-4" />
-                                                {week.total_hours}시간
+                                            <div className="flex items-center gap-4 text-sm text-neutral-400">
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="w-4 h-4" />
+                                                    {week.total_hours}시간
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {discordStatus[week.week_number] && (
+                                            <div className={`text-xs mb-4 p-2 rounded-lg border ${
+                                                discordStatus[week.week_number]?.type === 'success'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                            }`}>
+                                                {discordStatus[week.week_number]?.text}
+                                            </div>
+                                        )}
 
                                         {/* Goals */}
                                         <div className="mb-4">

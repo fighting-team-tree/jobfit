@@ -14,8 +14,10 @@ from sqlalchemy.orm import declarative_base
 
 # Replit PostgreSQL URL from settings
 DATABASE_URL = settings.DATABASE_URL
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite+aiosqlite:///./jobfit.db"
 
-# Convert postgres:// to postgresql+asyncpg:// for async driver
+# Convert postgres:// to postgresql+asyncpg:// for async driver (only for postgres URLs)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
@@ -29,16 +31,33 @@ if DATABASE_URL and "sslmode" in DATABASE_URL:
     new_query = urlencode(query_params, doseq=True)
     DATABASE_URL = urlunparse(parsed._replace(query=new_query))
 
-# Create async engine (only if DATABASE_URL is configured)
+# Create async engine
 engine = None
 AsyncSessionLocal = None
 
 if DATABASE_URL:
-    engine = create_async_engine(
-        DATABASE_URL,
-        echo=False,  # Set to True for SQL debugging
-        pool_pre_ping=True,  # Verify connections before use
-    )
+    is_sqlite = DATABASE_URL.startswith("sqlite")
+
+    if is_sqlite:
+        engine = create_async_engine(
+            DATABASE_URL,
+            echo=False,
+        )
+
+        # Enable foreign key constraint enforcement in SQLite
+        from sqlalchemy import event
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    else:
+        engine = create_async_engine(
+            DATABASE_URL,
+            echo=False,
+            pool_pre_ping=True,  # Verify connections before use
+        )
 
     AsyncSessionLocal = async_sessionmaker(
         engine,

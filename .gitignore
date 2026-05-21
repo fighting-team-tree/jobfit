@@ -119,3 +119,8 @@ parsing_result.md
 .codex/edge-profile-inspect/
 .codex/screens/
 .codex/diagrams/
+
+# SQLite Database Files
+*.db
+jobfit.db
+

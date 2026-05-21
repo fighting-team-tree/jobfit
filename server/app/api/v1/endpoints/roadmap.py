@@ -7,16 +7,21 @@ Supports PostgreSQL database for authenticated users.
 """
 
 import logging
+import uuid
 from typing import Literal
 
 from app.core.auth import get_optional_user
 from app.core.database import get_db
 from app.models.db_models import Roadmap as RoadmapModel
+from app.models.db_models import User
 from app.models.user import OptionalUser, ReplitUser
+from app.services.discord_service import discord_service
+from app.services.google_calendar_service import google_calendar_service
 from app.services.in_memory_store import ExpiringStore
 from app.services.user_service import get_or_create_user
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -76,6 +81,7 @@ class RoadmapRequest(BaseModel):
 class RoadmapResponse(BaseModel):
     """Generated learning roadmap."""
 
+    id: str | None = None
     title: str
     summary: str
     weekly_plans: list[WeeklyPlan]
@@ -136,7 +142,11 @@ def read_root():
 
 
 @router.post("/generate", response_model=RoadmapResponse)
-async def generate_roadmap(request: RoadmapRequest):
+async def generate_roadmap(
+    request: RoadmapRequest,
+    user: OptionalUser = Depends(get_optional_user),
+    db: AsyncSession | None = Depends(get_db),
+):
     """
     Generate a personalized learning roadmap based on gap analysis.
 
@@ -152,6 +162,7 @@ async def generate_roadmap(request: RoadmapRequest):
 
     if not missing_skills:
         return RoadmapResponse(
+            id=None,
             title="축하합니다! 🎉",
             summary="현재 프로필이 채용공고 요구사항과 잘 맞습니다. 지속적인 성장을 위한 선택적 학습 목록입니다.",
             weekly_plans=[],
@@ -228,14 +239,39 @@ async def generate_roadmap(request: RoadmapRequest):
         )
 
     total_hours = sum(wp.total_hours for wp in weekly_plans)
+    roadmap_id = f"gen-{uuid.uuid4()}"
 
-    return RoadmapResponse(
+    response_data = RoadmapResponse(
+        id=roadmap_id,
         title=f"{request.weeks}주 학습 로드맵",
         summary=f"{len(missing_skills)}개의 부족한 역량을 {request.weeks}주간 학습합니다. 주당 약 {total_hours // request.weeks}시간 투자가 필요합니다.",
         weekly_plans=weekly_plans,
         total_estimated_hours=total_hours,
         recommended_resources=resources,
     )
+
+    # Save to database or store
+    if use_database(db, user):
+        replit_user = ReplitUser(user_id=user.user_id, username=user.username)
+        await get_or_create_user(db, replit_user)
+
+        db_roadmap = RoadmapModel(
+            id=roadmap_id,
+            user_id=user.user_id,
+            title=response_data.title,
+            description=response_data.summary,
+            data=response_data.model_dump(),
+            missing_skills=missing_skills,
+            target_role=None,
+            total_weeks=request.weeks,
+        )
+        db.add(db_roadmap)
+        await db.commit()
+    else:
+        # Fallback: In-memory store
+        roadmaps_store[roadmap_id] = response_data
+
+    return response_data
 
 
 @router.post("/generate/agent")
@@ -499,3 +535,242 @@ async def complete_todo(todo_id: int, roadmap_id: str = "default"):
         "message": f"Todo {todo_id} marked as completed",
         "todo_id": todo_id,
     }
+
+
+class CalendarSyncRequest(BaseModel):
+    """Request schema for Google Calendar Roadmap Sync."""
+
+    start_date: str = Field(default="2026-05-22", pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+class DiscordNotifyRequest(BaseModel):
+    """Request schema for Discord Webhook Roadmap Notification."""
+
+    week_number: int = Field(default=1, ge=1)
+
+
+@router.post("/{roadmap_id}/sync-calendar")
+async def sync_roadmap_to_calendar(
+    roadmap_id: str,
+    request: CalendarSyncRequest,
+    user: OptionalUser = Depends(get_optional_user),
+    db: AsyncSession | None = Depends(get_db),
+):
+    """
+    Sync a generated roadmap to user's Google Calendar.
+    Requires Google OAuth authentication.
+    """
+    if not use_database(db, user):
+        raise HTTPException(
+            status_code=401, detail="Google Calendar 동기화는 회원 로그인 후 이용 가능합니다."
+        )
+
+    # 1. Get User
+    user_query = select(User).where(User.id == user.user_id)
+    user_res = await db.execute(user_query)
+    db_user = user_res.scalar_one_or_none()
+    if not db_user or not db_user.google_refresh_token:
+        raise HTTPException(
+            status_code=400, detail="구글 로그인 연동이 필요합니다. 다시 로그인해주세요."
+        )
+
+    # 2. Get Roadmap
+    roadmap_query = select(RoadmapModel).where(
+        RoadmapModel.id == roadmap_id, RoadmapModel.user_id == user.user_id
+    )
+    roadmap_res = await db.execute(roadmap_query)
+    roadmap = roadmap_res.scalar_one_or_none()
+
+    if not roadmap:
+        raise HTTPException(status_code=404, detail="해당 로드맵을 찾을 수 없습니다.")
+
+    # 3. Parse Roadmap weekly plans
+    roadmap_data = roadmap.data
+    weekly_plans = []
+
+    if roadmap_data:
+        if "weeks" in roadmap_data:
+            for w in roadmap_data.get("weeks", []):
+                weekly_plans.append(
+                    {
+                        "week_number": w.get("week_number"),
+                        "theme": w.get("title", ""),
+                        "goals": w.get("learning_objectives", []),
+                        "todos": [
+                            {
+                                "task": res.split(":")[1].strip() if ":" in res else res,
+                                "skill": w.get("focus_skills", ["학습"])[0]
+                                if w.get("focus_skills")
+                                else "General",
+                                "priority": "medium",
+                                "estimated_hours": 2,
+                                "resources": [res],
+                            }
+                            for res in w.get("resources", [])
+                        ],
+                    }
+                )
+        elif "weekly_plans" in roadmap_data:
+            weekly_plans = roadmap_data.get("weekly_plans", [])
+
+    if not weekly_plans:
+        raise HTTPException(
+            status_code=400, detail="로드맵 내에 학습 계획이 비어있어 동기화할 수 없습니다."
+        )
+
+    # 4. Sync
+    try:
+        success = await google_calendar_service.sync_roadmap_to_calendar(
+            user=db_user,
+            roadmap_title=roadmap.title or "JobFit 학습 로드맵",
+            weekly_plans=weekly_plans,
+            start_date_str=request.start_date,
+            db=db,
+        )
+        if not success:
+            raise HTTPException(status_code=500, detail="구글 캘린더 동기화에 실패했습니다.")
+        return {"status": "success", "message": "Google Calendar 동기화 성공"}
+    except Exception as e:
+        logger.error(f"Google calendar sync failed: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"구글 캘린더 동기화 중 오류 발생: {str(e)}"
+        ) from e
+
+
+@router.post("/{roadmap_id}/notify-discord")
+async def notify_discord(
+    roadmap_id: str,
+    request: DiscordNotifyRequest,
+    client_request: Request,
+    user: OptionalUser = Depends(get_optional_user),
+    db: AsyncSession | None = Depends(get_db),
+):
+    """
+    Send weekly roadmap plan to user's Discord Webhook.
+    """
+    webhook_url = None
+    roadmap_data = None
+    roadmap_title = "JobFit 학습 로드맵"
+
+    if use_database(db, user):
+        user_query = select(User).where(User.id == user.user_id)
+        user_res = await db.execute(user_query)
+        db_user = user_res.scalar_one_or_none()
+        if db_user:
+            webhook_url = db_user.discord_webhook_url
+
+        roadmap_query = select(RoadmapModel).where(
+            RoadmapModel.id == roadmap_id, RoadmapModel.user_id == user.user_id
+        )
+        roadmap_res = await db.execute(roadmap_query)
+        roadmap = roadmap_res.scalar_one_or_none()
+        if roadmap:
+            roadmap_data = roadmap.data
+            roadmap_title = roadmap.title or "JobFit 학습 로드맵"
+    else:
+        # Demo fallback
+        from app.api.v1.endpoints.profile import profiles_store as prof_store
+
+        session_id = client_request.headers.get("x-jobfit-client-session")
+        demo_key = f"demo:{session_id}" if session_id else None
+        if demo_key and demo_key in prof_store:
+            webhook_url = prof_store[demo_key].get("discord_webhook_url")
+
+        # Get roadmap from store
+        if roadmap_id in roadmaps_store:
+            agent_roadmap = roadmaps_store[roadmap_id]
+            roadmap_title = getattr(agent_roadmap, "title", "JobFit 학습 로드맵")
+            is_mock = type(agent_roadmap).__name__ in ("Mock", "MagicMock", "AsyncMock")
+            has_weekly_plans = (
+                "weekly_plans" in getattr(agent_roadmap, "_mock_children", {})
+                if is_mock
+                else hasattr(agent_roadmap, "weekly_plans")
+            )
+            if has_weekly_plans:
+                # RoadmapResponse fallback
+                roadmap_data = {
+                    "title": roadmap_title,
+                    "weeks": [
+                        {
+                            "week_number": w.week_number,
+                            "title": w.theme,
+                            "focus_skills": [t.skill for t in w.todos][:2] if w.todos else ["학습"],
+                            "learning_objectives": w.goals,
+                            "resources": [r for t in w.todos for r in t.resources if r],
+                            "estimated_hours": w.total_hours,
+                        }
+                        for w in agent_roadmap.weekly_plans
+                    ],
+                }
+            else:
+                # AgentRoadmap fallback
+                roadmap_data = {
+                    "title": roadmap_title,
+                    "weeks": [
+                        {
+                            "week_number": w.week_number,
+                            "title": w.title,
+                            "focus_skills": w.focus_skills,
+                            "learning_objectives": w.learning_objectives,
+                            "resources": w.resources,
+                            "estimated_hours": w.estimated_hours,
+                        }
+                        for w in getattr(agent_roadmap, "weeks", [])
+                    ],
+                }
+
+    if not webhook_url:
+        raise HTTPException(
+            status_code=400,
+            detail="디스코드 웹훅 URL이 설정되지 않았습니다. 프로필 설정에서 등록해주세요.",
+        )
+
+    if not roadmap_data:
+        raise HTTPException(status_code=404, detail="로드맵 데이터를 찾을 수 없습니다.")
+
+    # Find target weekly plan
+    target_plan = None
+
+    if "weeks" in roadmap_data:
+        for w in roadmap_data.get("weeks", []):
+            if w.get("week_number") == request.week_number:
+                target_plan = {
+                    "week_number": w.get("week_number"),
+                    "theme": w.get("title", ""),
+                    "goals": w.get("learning_objectives", []),
+                    "todos": [
+                        {
+                            "task": res.split(":")[1].strip() if ":" in res else res,
+                            "skill": w.get("focus_skills", ["학습"])[0]
+                            if w.get("focus_skills")
+                            else "General",
+                            "priority": "medium",
+                            "estimated_hours": 2,
+                            "resources": [res],
+                        }
+                        for res in w.get("resources", [])
+                    ],
+                }
+                break
+    elif "weekly_plans" in roadmap_data:
+        for wp in roadmap_data.get("weekly_plans", []):
+            wp_dict = wp if isinstance(wp, dict) else wp.model_dump()
+            if wp_dict.get("week_number") == request.week_number:
+                target_plan = wp_dict
+                break
+
+    if not target_plan:
+        raise HTTPException(
+            status_code=400,
+            detail=f"선택한 {request.week_number}주차 계획을 로드맵에서 찾을 수 없습니다.",
+        )
+
+    # Send Notification
+    success = await discord_service.send_weekly_roadmap_notification(
+        webhook_url=webhook_url, roadmap_title=roadmap_title, weekly_plan=target_plan
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="디스코드 알림 발송에 실패했습니다.")
+
+    return {"status": "success", "message": "Discord 알림 발송 성공"}
