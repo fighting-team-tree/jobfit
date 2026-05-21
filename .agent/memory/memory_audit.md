@@ -1,6 +1,6 @@
 # Memory Audit
 
-Last reviewed: 2026-05-20
+Last reviewed: 2026-05-22
 
 ## 1. Memory Surfaces
 

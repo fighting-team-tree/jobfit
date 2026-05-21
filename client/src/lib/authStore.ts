@@ -42,7 +42,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       accessToken: getAuthToken(),
       isAuthenticated: false,
@@ -119,17 +119,38 @@ export const useAuthStore = create<AuthState>()(
         useProfileStore.getState().loadFromServer();
       },
 
-      setMockUser: () => {
-        if (MOCK_USER) {
-          clearAuthToken();
-          set({
-            user: MOCK_USER,
-            accessToken: null,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-          // Load profile from server for mock user
-          useProfileStore.getState().loadFromServer();
+      setMockUser: async () => {
+        if (DEV_MODE) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/auth/test-login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!res.ok) {
+              throw new Error('Test login failed on server');
+            }
+
+            const data = await res.json();
+            if (data.access_token) {
+              get().completeLogin(data.access_token, {
+                user_id: data.user.sub,
+                username: data.user.username,
+                email: data.user.email,
+              });
+            }
+          } catch (error) {
+            console.error('Failed to perform test login:', error);
+            // Fallback to local memory if API fails
+            clearAuthToken();
+            set({
+              user: MOCK_USER,
+              accessToken: null,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+            useProfileStore.getState().loadFromServer();
+          }
         }
       },
     }),

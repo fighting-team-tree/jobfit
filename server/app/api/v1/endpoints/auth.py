@@ -203,3 +203,48 @@ async def auth_google_callback(
     our_token = create_access_token(jwt_payload)
 
     return {"access_token": our_token, "token_type": "bearer", "user": jwt_payload}
+
+
+@router.post("/test-login")
+async def test_login(
+    db: AsyncSession | None = Depends(get_db),
+):
+    """
+    [DEVELOPMENT ONLY] Returns a valid JWT token for a local test user.
+    Creates the test user in the database if they don't exist.
+    """
+    if settings.ENVIRONMENT.lower() in {"production", "prod"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Test login is disabled in production.",
+        )
+
+    test_user_id = "dev-user-123"
+    test_username = "DevUser"
+    test_email = "dev-user@example.com"
+
+    # DB Sync if DB is configured
+    if db:
+        query = select(User).where(User.id == test_user_id)
+        result = await db.execute(query)
+        db_user = result.scalar_one_or_none()
+
+        if not db_user:
+            db_user = User(
+                id=test_user_id,
+                username=test_username,
+            )
+            db.add(db_user)
+            await db.commit()
+
+    # Create our own JWT token
+    jwt_payload = {
+        "sub": test_user_id,
+        "email": test_email,
+        "username": test_username,
+        "picture": None,
+    }
+
+    our_token = create_access_token(jwt_payload)
+
+    return {"access_token": our_token, "token_type": "bearer", "user": jwt_payload}

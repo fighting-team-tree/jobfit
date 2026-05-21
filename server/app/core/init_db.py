@@ -33,6 +33,30 @@ async def init_db():
             await conn.run_sync(Base.metadata.create_all)
         print("✅ Database tables initialized successfully.")
         _initialized = True
+
+        # Seed test user in development mode
+        from app.core.config import settings
+        from app.core.database import AsyncSessionLocal
+        from app.models.db_models import User
+        from sqlalchemy.future import select
+
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"} and AsyncSessionLocal is not None:
+            async with AsyncSessionLocal() as session:
+                try:
+                    # Check if test user exists
+                    query = select(User).where(User.id == "dev-user-123")
+                    result = await session.execute(query)
+                    db_user = result.scalar_one_or_none()
+                    if not db_user:
+                        test_user = User(
+                            id="dev-user-123",
+                            username="DevUser"
+                        )
+                        session.add(test_user)
+                        await session.commit()
+                        print("👥 Seeded local test user (dev-user-123) successfully.")
+                except Exception as seed_err:
+                    print(f"⚠️ Failed to seed test user: {seed_err}")
     except Exception as e:
         # Don't crash the server if DB connection fails
         # This allows running locally without DB access

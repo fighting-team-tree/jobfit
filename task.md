@@ -7,6 +7,6 @@
 - [x] `.agent/memory/memory_audit.md`로 프로젝트 메모리 표면과 리스크 정리
 
 ## Follow-up
-- [ ] 브라우저 `localStorage`의 GitHub token 저장 제거 또는 서버-side 단기 토큰 흐름으로 대체
-- [ ] `active_sessions`, `problems_store`, `EmbeddingService._cache`에 TTL/LRU/cleanup 적용
-- [ ] interview WebSocket audio queue에 bounded size와 overflow 정책 적용
+- [x] 브라우저 `localStorage`의 GitHub token 저장 제거 또는 서버-side 단기 토큰 흐름으로 대체
+- [x] `active_sessions`, `problems_store`, `EmbeddingService._cache`에 TTL/LRU/cleanup 적용
+- [x] interview WebSocket audio queue에 bounded size와 overflow 정책 적용
