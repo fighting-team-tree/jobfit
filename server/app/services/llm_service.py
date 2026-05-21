@@ -10,8 +10,8 @@ import json
 import re
 
 from app.core.config import settings
+from app.core.llm_client import LLMClientFactory
 from app.services.pii import mask_pii, mask_pii_payload
-from openai import AsyncOpenAI
 
 
 class LLMService:
@@ -19,25 +19,8 @@ class LLMService:
 
     def __init__(self):
         provider = settings.LLM_PROVIDER
-
-        if provider == "gemini":
-            self.client = AsyncOpenAI(
-                api_key=settings.GOOGLE_API_KEY,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-            self.parse_model = settings.LLM_PARSE_MODEL or "gemini-3.1-flash-lite"
-            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "gemini-3.1-flash-lite"
-        elif provider == "upstage":
-            self.client = AsyncOpenAI(
-                api_key=settings.UPSTAGE_API_KEY,
-                base_url="https://api.upstage.ai/v1",
-            )
-            self.parse_model = settings.LLM_PARSE_MODEL or "solar-pro-2"
-            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "solar-pro-3"
-        else:  # openai
-            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            self.parse_model = settings.LLM_PARSE_MODEL or "gpt-5.5-instant"
-            self.analysis_model = settings.LLM_ANALYSIS_MODEL or "gpt-5.5"
+        self.client = LLMClientFactory.create_client(provider)
+        self.parse_model, self.analysis_model, _ = LLMClientFactory.get_models(provider)
 
     async def call_llm(
         self,

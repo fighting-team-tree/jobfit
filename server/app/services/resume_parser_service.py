@@ -11,8 +11,8 @@ import json
 import re
 
 from app.core.config import settings
+from app.core.llm_client import LLMClientFactory
 from app.services.pii import mask_pii
-from openai import AsyncOpenAI
 from PIL import Image
 
 
@@ -21,18 +21,11 @@ class ResumeParserService:
 
     def __init__(self):
         provider = settings.LLM_PROVIDER
-
-        if provider == "gemini":
-            self.client = AsyncOpenAI(
-                api_key=settings.GOOGLE_API_KEY,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-            self.vision_model = settings.LLM_PARSE_MODEL or "gemini-2.5-flash"
-            self.text_model = settings.LLM_PARSE_MODEL or "gemini-2.5-flash"
-        else:  # openai
-            self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            self.vision_model = settings.LLM_PARSE_MODEL or "gpt-4o-mini"
-            self.text_model = settings.LLM_PARSE_MODEL or "gpt-4o-mini"
+        self.provider = provider
+        self.client = LLMClientFactory.create_client(provider)
+        parse_model, _, vision_model = LLMClientFactory.get_models(provider)
+        self.vision_model = vision_model
+        self.text_model = parse_model
 
     def _extract_images_from_pdf(self, pdf_bytes: bytes) -> list[str]:
         """Extract pages from PDF as base64 images."""
@@ -87,6 +80,43 @@ class ResumeParserService:
             }
         """
         try:
+            # Upstage는 VLM 대신 Document Parse API를 직접 호출하여 한 번에 처리
+            if self.provider == "upstage":
+                url = "https://api.upstage.ai/v1/document-ai/document-parse"
+                headers = {"Authorization": f"Bearer {settings.UPSTAGE_API_KEY}"}
+
+                # 파일 확장자 및 MIME 타입 매핑
+                mime_type = "application/pdf" if file_extension.lower() == ".pdf" else "image/png"
+                files = {"document": (f"resume{file_extension}", file_bytes, mime_type)}
+                data = {"output_format": "markdown"}
+
+                import httpx
+
+                async with httpx.AsyncClient(timeout=120.0) as httpx_client:
+                    response = await httpx_client.post(url, headers=headers, files=files, data=data)
+
+                if response.status_code != 200:
+                    return {
+                        "markdown": "",
+                        "pages": 0,
+                        "success": False,
+                        "error": f"Upstage API Error {response.status_code}: {response.text}",
+                    }
+
+                res_data = response.json()
+                markdown_content = res_data.get("content", {}).get("markdown", "")
+                pages = res_data.get("usage", {}).get("pages", 1)
+
+                if apply_pii_mask:
+                    markdown_content = mask_pii(markdown_content)
+
+                return {
+                    "markdown": markdown_content,
+                    "pages": pages,
+                    "success": True,
+                    "error": None,
+                }
+
             # Extract images based on file type
             if file_extension.lower() == ".pdf":
                 base64_images = self._extract_images_from_pdf(file_bytes)

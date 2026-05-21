@@ -40,7 +40,10 @@ async def init_db():
         from app.models.db_models import User
         from sqlalchemy.future import select
 
-        if settings.ENVIRONMENT.lower() not in {"production", "prod"} and AsyncSessionLocal is not None:
+        if (
+            settings.ENVIRONMENT.lower() not in {"production", "prod"}
+            and AsyncSessionLocal is not None
+        ):
             async with AsyncSessionLocal() as session:
                 try:
                     # Check if test user exists
@@ -48,10 +51,7 @@ async def init_db():
                     result = await session.execute(query)
                     db_user = result.scalar_one_or_none()
                     if not db_user:
-                        test_user = User(
-                            id="dev-user-123",
-                            username="DevUser"
-                        )
+                        test_user = User(id="dev-user-123", username="DevUser")
                         session.add(test_user)
                         await session.commit()
                         print("👥 Seeded local test user (dev-user-123) successfully.")
