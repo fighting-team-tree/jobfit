@@ -26,6 +26,7 @@
 ## Profile API (`/profile`)
 - `GET /profile/me`: 현재 사용자 프로필 조회
 - `PUT /profile/me`: 프로필/이력서/JD/GitHub/갭 분석 결과 저장
+- `PUT /profile/me/discord`: Discord Webhook URL 설정
 - 인증 사용자는 DB를 사용하고, 미인증 demo 모드는 `profiles_store` 인메모리 fallback을 사용한다.
 
 ## Companies API (`/companies`)
@@ -57,6 +58,8 @@
 - `GET /roadmap/problems/{problem_id}` / `GET /roadmap/problem/{problem_id}`: 문제 조회
 - `POST /roadmap/problems/{problem_id}/evaluate` / `POST /roadmap/evaluate`: 풀이 평가
 - `POST /roadmap/todo/complete`: todo 완료 처리
+- `POST /roadmap/{roadmap_id}/sync-calendar`: Google Calendar 일정 동기화
+- `POST /roadmap/{roadmap_id}/notify-discord`: Discord Webhook 알림 전송
 - 문제 fallback 저장은 `problems_store` 인메모리 dict이다.
 
 ## Git API (`/git`)

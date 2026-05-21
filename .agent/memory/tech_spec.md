@@ -36,6 +36,9 @@ graph TD
 - `.agent/memory/tech_spec.md`: architecture and implementation snapshot.
 - `.agent/memory/api_schema.md`: API snapshot.
 - `.agent/memory/memory_audit.md`: memory/persistence risk map.
+- `.agent/memory/PRD.md`: product requirements document.
+- `.agent/memory/technical_feasibility.md`: technical feasibility study.
+- `.agent/memory/ui_ux_design.md`: UI/UX design and flow.
 
 ### OMX runtime state
 - `.omx/state/*.json`, `.omx/logs/*.jsonl`, `.omx/cache/codebase-map.json` are session/runtime metadata, not product data storage.

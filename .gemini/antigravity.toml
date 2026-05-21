@@ -16,7 +16,10 @@ context-files = [
     ".agent/memory/active_context.md",
     ".agent/memory/tech_spec.md",
     ".agent/memory/PRD.md",
-    ".agent/memory/memory_audit.md"
+    ".agent/memory/memory_audit.md",
+    ".agent/memory/api_schema.md",
+    ".agent/memory/technical_feasibility.md",
+    ".agent/memory/ui_ux_design.md"
 ]
 rules-dir = ".agent/rules"
 skills-dir = ".agent/skills"
