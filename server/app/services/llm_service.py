@@ -20,7 +20,9 @@ class LLMService:
     def __init__(self):
         provider = settings.LLM_PROVIDER
         self.client = LLMClientFactory.create_client(provider)
-        self.parse_model, self.analysis_model, _ = LLMClientFactory.get_models(provider)
+        self.parse_model, self.analysis_model, self.vision_model = LLMClientFactory.get_models(
+            provider
+        )
 
     async def call_llm(
         self,
@@ -89,6 +91,111 @@ class LLMService:
                 pass
 
         return {"error": True, "raw": content}
+
+    async def parse_jd_image(self, image_bytes: bytes) -> str:
+        """Parse job description image into structured text using VLM or Document Parser."""
+        if settings.LLM_PROVIDER == "upstage":
+            # Upstage는 Document AI의 Document Parse API를 직접 호출하여 한 번에 마크다운 형태로 파싱 가능
+            url = "https://api.upstage.ai/v1/document-ai/document-parse"
+            headers = {"Authorization": f"Bearer {settings.UPSTAGE_API_KEY}"}
+            files = {"document": ("jd_screenshot.png", image_bytes, "image/png")}
+            data = {"output_format": "markdown"}
+
+            import httpx
+
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as httpx_client:
+                    response = await httpx_client.post(url, headers=headers, files=files, data=data)
+
+                if response.status_code == 200:
+                    res_data = response.json()
+                    markdown_content = res_data.get("content", {}).get("markdown", "")
+                    if markdown_content:
+                        return markdown_content
+            except Exception as e:
+                print(f"Upstage Document Parse failed, trying fallback: {e}")
+
+        import base64
+
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+
+        prompt = """당신은 채용 공고(Job Description) 분석 전문가입니다.
+제공된 채용 공고 이미지에서 텍스트를 추출하고 구조화하여 정리해주세요.
+
+다음 항목들을 명확히 구분하여 한글로 정리해주세요:
+1. **회사명 및 공고 제목** (알 수 있는 경우)
+2. **모집 분야 및 직무**
+3. **주요 업무 (Responsibilities)**
+4. **지원 자격 및 필수 요건 (Requirements)**
+5. **우대 사항 (Preferred Qualifications)**
+6. **복지 및 혜택 (Benefits)**
+7. **기타 정보** (근무지, 고용 형태 등)
+
+이미지에 텍스트가 없거나 판독할 수 없는 경우, 빈 결과를 내지 말고 최대한 관련 정보를 유추해서 적어주세요.
+마크다운 형식으로 깔끔하게 작성해주세요."""
+
+        response = await self.client.chat.completions.create(
+            model=self.vision_model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{base64_image}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=3000,
+        )
+        content = response.choices[0].message.content
+        return content or ""
+
+    async def refine_jd_text(self, raw_text: str) -> str:
+        """OCR이나 문서 파싱 등으로 인해 레이아웃이 뒤틀린 채용공고 텍스트를 구조화된 마크다운 형식으로 재구성합니다."""
+        if not raw_text or len(raw_text.strip()) < 10:
+            return raw_text
+
+        prompt = f"""다음 텍스트는 이미지 채용 공고에서 OCR(문서 인식) 또는 문서 파싱을 통해 추출한 원본 데이터입니다.
+표 레이아웃이나 그리드 구조 때문에 일부 항목의 제목과 실제 내용의 순서가 뒤틀리거나 뒤섞여 있을 수 있습니다 (예: '담당 업무' 제목 아래에 내용이 없고 다른 곳에 본문이 위치함).
+
+텍스트의 의미와 문맥을 분석하여, 다음 항목들을 명확히 구분하여 잘 정리된 마크다운 채용 공고로 재구성해주세요.
+내용을 임의로 왜곡하거나 삭제하지 말고, 뒤섞인 순서만 논리적으로 올바르게 맞춰주세요.
+
+[정리할 항목]
+1. 회사명 및 공고 제목 (확인 가능한 경우)
+2. 모집 분야
+3. 주요 업무 (Responsibilities)
+4. 지원 자격 및 필수 요건 (Requirements)
+5. 우대 사항 (Preferred Qualifications)
+6. 근무 조건 및 복지 (있을 경우)
+
+[원본 텍스트]
+{raw_text}
+
+[출력 형식]
+반드시 깔끔한 한국어 마크다운 형식으로 작성해주세요. 다른 부연 설명 없이 마크다운 본문만 출력하세요.
+"""
+        try:
+            refined = await self.call_llm(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional assistant specializing in restructuring and formatting job descriptions.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                model=self.analysis_model,
+                temperature=0.1,
+                max_tokens=3000,
+            )
+            return refined.strip() if refined else raw_text
+        except Exception as e:
+            print(f"Failed to refine JD text: {e}")
+            return raw_text
 
     # ===== nvidia_service.py 1:1 대체 메서드들 =====
 

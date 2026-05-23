@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # 모델명 override (비어있으면 provider 기본값 사용)
     LLM_PARSE_MODEL: str = ""
     LLM_ANALYSIS_MODEL: str = ""
+    LLM_VISION_MODEL: str = ""
     EMBEDDING_MODEL: str = ""
 
     # GitHub API

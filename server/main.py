@@ -1,5 +1,10 @@
+import asyncio
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from app.api.v1.api import api_router
 from app.core.config import settings

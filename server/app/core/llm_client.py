@@ -86,6 +86,6 @@ class LLMClientFactory:
 
         parse_model = settings.LLM_PARSE_MODEL or info["parse_model"]
         analysis_model = settings.LLM_ANALYSIS_MODEL or info["analysis_model"]
-        vision_model = settings.LLM_PARSE_MODEL or info["vision_model"]
+        vision_model = settings.LLM_VISION_MODEL or info["vision_model"]
 
         return parse_model, analysis_model, vision_model

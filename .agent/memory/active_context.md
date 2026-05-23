@@ -19,6 +19,8 @@
   - Scoped demo fallback profile/company storage by `X-JobFit-Client-Session` and blocked those fallback stores in production.
   - Stopped persisting GitHub PATs in `jobfit_github_config`; only repo/username metadata remains in localStorage.
   - Added validation for roadmap week/count inputs and regression tests for PII masking, fallback isolation, and `weeks=0`.
+  - **Image JD Layout Refinement:** Added `refine_jd_text` to post-process raw text extracted from image JDs (VLM or Upstage Document Parse API) into clean, logically ordered Markdown structured formats.
+  - **Windows asyncio Bug Fix:** Configured `WindowsProactorEventLoopPolicy` as the default event loop policy on Windows (`win32` platform) in `main.py` and `jd_scraper_service.py` to prevent `NotImplementedError` when executing Playwright's headless browser subprocesses.
 - **Runtime State Cleanup:**
   - Moved browser auth token storage from `localStorage` to `sessionStorage` with one-time legacy cleanup.
   - Reduced `jobfit-profile` persistence to non-PII GitHub URL metadata only; resume/JD/profile/analysis data stays in memory/server sync.

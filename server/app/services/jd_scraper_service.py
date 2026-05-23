@@ -4,13 +4,18 @@ JD (Job Description) Scraper Service
 Scrapes job postings from URLs using httpx + BeautifulSoup with Playwright fallback.
 """
 
+import asyncio
 import re
 import socket
+import sys
 from ipaddress import ip_address
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
 class JDScraperService:
@@ -53,6 +58,27 @@ class JDScraperService:
         ".social-share",
         ".related-jobs",
         "iframe",
+        # 추가 노이즈 셀렉터 (한국 채용 플랫폼 대응)
+        "#gimm_login_layer",
+        "#tabMap",
+        ".map_area",
+        ".tab_map",
+        ".recruit-aside",
+        "#detail_aside",
+        ".qna-wrapper",
+        ".review-wrapper",
+        ".co-review",
+        ".company-info-area",
+        ".company-info",
+        ".share-btn-group",
+        "#login_popup",
+        ".login-popup-wrapper",
+        "#gnb",
+        "#header",
+        "#footer",
+        ".qna_area",
+        ".comment_area",
+        ".reply_area",
     ]
 
     async def scrape_jd_from_url(self, url: str) -> dict:
@@ -76,6 +102,14 @@ class JDScraperService:
         validation_error = self._validate_safe_url(url)
         if validation_error:
             return self._error_response(url, validation_error)
+
+        # JobKorea, Saramin, Wanted 등 동적/이미지 렌더링 중심 사이트는 강제로 Playwright 사용
+        force_playwright_domains = ["jobkorea.co.kr", "saramin.co.kr", "wanted.co.kr"]
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.lower()
+
+        if any(d in domain for d in force_playwright_domains):
+            return await self._scrape_with_playwright(url)
 
         # 1. Try httpx first
         result = await self._scrape_with_httpx(url)
@@ -144,13 +178,16 @@ class JDScraperService:
     async def _scrape_with_playwright(self, url: str) -> dict:
         """Fallback scraping with Playwright for JS-rendered sites."""
         try:
+            from app.services.llm_service import llm_service
             from playwright.async_api import async_playwright
 
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
+                # 넉넉한 viewport 크기 설정
                 context = await browser.new_context(
-                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     locale="ko-KR",
+                    viewport={"width": 1280, "height": 3000},
                 )
                 page = await context.new_page()
 
@@ -164,35 +201,133 @@ class JDScraperService:
                 await page.route("**/*", block_unsafe_requests)
 
                 # Navigate and wait for content
-                await page.goto(url, wait_until="networkidle", timeout=30000)
-                await page.wait_for_timeout(2000)  # Extra wait for dynamic content
+                try:
+                    await page.goto(url, wait_until="load", timeout=20000)
+                except Exception as goto_err:
+                    print(f"Page goto warning (retrying with domcontentloaded): {goto_err}")
+                    # 혹시 load에서도 실패하면 domcontentloaded로 재시도
+                    await page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
-                # Get page content
-                html = await page.content()
+                # 잡코리아 iframe 혹은 일반 본문 셀렉터가 뜰 때까지만 확실하게 대기
+                try:
+                    await page.wait_for_selector(
+                        "#gib_frame, article, .job-description, .job-content", timeout=10000
+                    )
+                except Exception as wait_err:
+                    print(f"Selector wait warning: {wait_err}")
+
+                # 동적 로드 대기를 위한 아주 짧은 여유 시간
+                await page.wait_for_timeout(1000)
+
                 title = await page.title()
+                raw_text = ""
+                success = False
+                screenshot_bytes = None
+                is_image_jd = False
+
+                # 1. 상세 공고 iframe 처리 (ID 외에 title, src 등으로 범용 감지)
+                iframe_element = await page.query_selector(
+                    "iframe#gib_frame, iframe[title*='모집 요강'], iframe[src*='GI_Read_Comt_Ifrm'], iframe[src*='GI_Read_Frame']"
+                )
+                if iframe_element:
+                    name_attr = await iframe_element.get_attribute("name")
+                    src_attr = await iframe_element.get_attribute("src")
+
+                    frame = None
+                    if name_attr:
+                        frame = page.frame(name=name_attr)
+                    if not frame and src_attr:
+                        frame = next(
+                            (f for f in page.frames if src_attr in f.url or f.url in src_attr), None
+                        )
+                    if frame:
+                        await frame.wait_for_load_state("networkidle")
+                        # iframe 내부 콘텐츠 확인
+                        iframe_html = await frame.content()
+                        iframe_soup = BeautifulSoup(iframe_html, "lxml")
+
+                        # 불필요한 노이즈 제거 후 텍스트와 이미지 체크
+                        for selector in self.NOISE_SELECTORS:
+                            if selector != "iframe":  # iframe 내부의 noise 제거
+                                for el in iframe_soup.select(selector):
+                                    el.decompose()
+
+                        iframe_text = iframe_soup.get_text(separator="\n", strip=True)
+                        iframe_images = iframe_soup.find_all("img")
+
+                        # 텍스트가 매우 짧고 이미지가 많은 경우 이미지 JD로 판단
+                        if len(iframe_text.strip()) < 300 and len(iframe_images) > 0:
+                            is_image_jd = True
+                            # iframe 자체를 스크린샷 캡처
+                            screenshot_bytes = await iframe_element.screenshot(type="png")
+                        else:
+                            raw_text = iframe_text
+                            success = len(raw_text.strip()) > 100
+
+                # 2. 잡코리아가 아니거나 iframe이 없는 경우 일반 처리
+                if not iframe_element or (is_image_jd and screenshot_bytes is None):
+                    # 일반 JD 선택자에서 내용 찾기
+                    jd_element = None
+                    for selector in self.JD_SELECTORS:
+                        el = await page.query_selector(selector)
+                        if el:
+                            # 텍스트와 이미지 확인
+                            el_html = await el.inner_html()
+                            el_soup = BeautifulSoup(el_html, "lxml")
+
+                            # 노이즈 제거
+                            for noise in self.NOISE_SELECTORS:
+                                if noise != "iframe":
+                                    for nel in el_soup.select(noise):
+                                        nel.decompose()
+
+                            el_text = el_soup.get_text(separator="\n", strip=True)
+                            el_images = el_soup.find_all("img")
+
+                            if len(el_text.strip()) < 300 and len(el_images) > 0:
+                                is_image_jd = True
+                                screenshot_bytes = await el.screenshot(type="png")
+                                jd_element = el
+                                break
+                            elif len(el_text.strip()) > 200:
+                                jd_element = el
+                                raw_text = el_text
+                                success = True
+                                break
+
+                    # JD 선택자로도 못 찾은 경우 전체 페이지 fallback
+                    if not jd_element:
+                        html = await page.content()
+                        soup = BeautifulSoup(html, "lxml")
+                        for selector in self.NOISE_SELECTORS:
+                            for el in soup.select(selector):
+                                el.decompose()
+                        raw_text = self._extract_jd_content(soup)
+                        success = len(raw_text.strip()) > 100
 
                 await browser.close()
 
-                # Parse with BeautifulSoup
-                soup = BeautifulSoup(html, "lxml")
-
-                # Remove noise
-                for selector in self.NOISE_SELECTORS:
-                    for el in soup.select(selector):
-                        el.decompose()
-
-                raw_text = self._extract_jd_content(soup)
+                # 3. 이미지 JD인 경우 VLM을 이용해 텍스트 추출 및 정제
+                if is_image_jd and screenshot_bytes:
+                    vlm_text = await llm_service.parse_jd_image(screenshot_bytes)
+                    if vlm_text:
+                        refined_text = await llm_service.refine_jd_text(vlm_text)
+                        raw_text = refined_text
+                        success = True
 
                 return {
                     "url": url,
                     "title": title or "",
                     "raw_text": self._clean_text(raw_text) if raw_text else "",
-                    "success": bool(raw_text and len(raw_text) > 100),
-                    "error": None if raw_text else "Could not extract content",
+                    "success": success,
+                    "error": None if success else "Could not extract content",
                     "method": "playwright",
                 }
 
         except Exception as e:
+            import traceback
+
+            traceback.print_exc()
             return self._error_response(url, f"Playwright error: {str(e)}", method="playwright")
 
     def _extract_title(self, soup: BeautifulSoup) -> str:
