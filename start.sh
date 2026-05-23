@@ -6,4 +6,4 @@ set -e
 
 echo "🌐 서버 시작 중... (port 8000)"
 cd server
-uv run uvicorn main:app --host 0.0.0.0 --port 8000
+uv run uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio

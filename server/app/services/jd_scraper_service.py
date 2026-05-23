@@ -179,150 +179,164 @@ class JDScraperService:
         """Fallback scraping with Playwright for JS-rendered sites."""
         try:
             from app.services.llm_service import llm_service
-            from playwright.async_api import async_playwright
-
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                # 넉넉한 viewport 크기 설정
-                context = await browser.new_context(
-                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    locale="ko-KR",
-                    viewport={"width": 1280, "height": 3000},
-                )
-                page = await context.new_page()
-
-                async def block_unsafe_requests(route):
-                    request_url = route.request.url
-                    if self._validate_safe_url(request_url):
-                        await route.abort()
-                    else:
-                        await route.continue_()
-
-                await page.route("**/*", block_unsafe_requests)
-
-                # Navigate and wait for content
-                try:
-                    await page.goto(url, wait_until="load", timeout=20000)
-                except Exception as goto_err:
-                    print(f"Page goto warning (retrying with domcontentloaded): {goto_err}")
-                    # 혹시 load에서도 실패하면 domcontentloaded로 재시도
-                    await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-
-                # 잡코리아 iframe 혹은 일반 본문 셀렉터가 뜰 때까지만 확실하게 대기
-                try:
-                    await page.wait_for_selector(
-                        "#gib_frame, article, .job-description, .job-content", timeout=10000
-                    )
-                except Exception as wait_err:
-                    print(f"Selector wait warning: {wait_err}")
-
-                # 동적 로드 대기를 위한 아주 짧은 여유 시간
-                await page.wait_for_timeout(1000)
-
-                title = await page.title()
-                raw_text = ""
-                success = False
-                screenshot_bytes = None
-                is_image_jd = False
-
-                # 1. 상세 공고 iframe 처리 (ID 외에 title, src 등으로 범용 감지)
-                iframe_element = await page.query_selector(
-                    "iframe#gib_frame, iframe[title*='모집 요강'], iframe[src*='GI_Read_Comt_Ifrm'], iframe[src*='GI_Read_Frame']"
-                )
-                if iframe_element:
-                    name_attr = await iframe_element.get_attribute("name")
-                    src_attr = await iframe_element.get_attribute("src")
-
-                    frame = None
-                    if name_attr:
-                        frame = page.frame(name=name_attr)
-                    if not frame and src_attr:
-                        frame = next(
-                            (f for f in page.frames if src_attr in f.url or f.url in src_attr), None
+            import asyncio
+            import sys
+            
+            def run_in_new_loop():
+                if sys.platform == "win32":
+                    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+                
+                async def _inner_scrape():
+                    from playwright.async_api import async_playwright
+                    from bs4 import BeautifulSoup
+                    async with async_playwright() as p:
+                        browser = await p.chromium.launch(headless=True)
+                        # 넉넉한 viewport 크기 설정
+                        context = await browser.new_context(
+                            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                            locale="ko-KR",
+                            viewport={"width": 1280, "height": 3000},
                         )
-                    if frame:
-                        await frame.wait_for_load_state("networkidle")
-                        # iframe 내부 콘텐츠 확인
-                        iframe_html = await frame.content()
-                        iframe_soup = BeautifulSoup(iframe_html, "lxml")
+                        page = await context.new_page()
 
-                        # 불필요한 노이즈 제거 후 텍스트와 이미지 체크
-                        for selector in self.NOISE_SELECTORS:
-                            if selector != "iframe":  # iframe 내부의 noise 제거
-                                for el in iframe_soup.select(selector):
-                                    el.decompose()
+                        async def block_unsafe_requests(route):
+                            request_url = route.request.url
+                            if self._validate_safe_url(request_url):
+                                await route.abort()
+                            else:
+                                await route.continue_()
 
-                        iframe_text = iframe_soup.get_text(separator="\n", strip=True)
-                        iframe_images = iframe_soup.find_all("img")
+                        await page.route("**/*", block_unsafe_requests)
 
-                        # 텍스트가 매우 짧고 이미지가 많은 경우 이미지 JD로 판단
-                        if len(iframe_text.strip()) < 300 and len(iframe_images) > 0:
-                            is_image_jd = True
-                            # iframe 자체를 스크린샷 캡처
-                            screenshot_bytes = await iframe_element.screenshot(type="png")
-                        else:
-                            raw_text = iframe_text
-                            success = len(raw_text.strip()) > 100
+                        # Navigate and wait for content
+                        try:
+                            await page.goto(url, wait_until="load", timeout=20000)
+                        except Exception as goto_err:
+                            print(f"Page goto warning (retrying with domcontentloaded): {goto_err}")
+                            # 혹시 load에서도 실패하면 domcontentloaded로 재시도
+                            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
-                # 2. 잡코리아가 아니거나 iframe이 없는 경우 일반 처리
-                if not iframe_element or (is_image_jd and screenshot_bytes is None):
-                    # 일반 JD 선택자에서 내용 찾기
-                    jd_element = None
-                    for selector in self.JD_SELECTORS:
-                        el = await page.query_selector(selector)
-                        if el:
-                            # 텍스트와 이미지 확인
-                            el_html = await el.inner_html()
-                            el_soup = BeautifulSoup(el_html, "lxml")
+                        # 잡코리아 iframe 혹은 일반 본문 셀렉터가 뜰 때까지만 확실하게 대기
+                        try:
+                            await page.wait_for_selector(
+                                "#gib_frame, article, .job-description, .job-content", timeout=10000
+                            )
+                        except Exception as wait_err:
+                            print(f"Selector wait warning: {wait_err}")
 
-                            # 노이즈 제거
-                            for noise in self.NOISE_SELECTORS:
-                                if noise != "iframe":
-                                    for nel in el_soup.select(noise):
-                                        nel.decompose()
+                        # 동적 로드 대기를 위한 아주 짧은 여유 시간
+                        await page.wait_for_timeout(1000)
 
-                            el_text = el_soup.get_text(separator="\n", strip=True)
-                            el_images = el_soup.find_all("img")
+                        title = await page.title()
+                        raw_text = ""
+                        success = False
+                        screenshot_bytes = None
+                        is_image_jd = False
 
-                            if len(el_text.strip()) < 300 and len(el_images) > 0:
-                                is_image_jd = True
-                                screenshot_bytes = await el.screenshot(type="png")
-                                jd_element = el
-                                break
-                            elif len(el_text.strip()) > 200:
-                                jd_element = el
-                                raw_text = el_text
-                                success = True
-                                break
+                        # 1. 상세 공고 iframe 처리 (ID 외에 title, src 등으로 범용 감지)
+                        iframe_element = await page.query_selector(
+                            "iframe#gib_frame, iframe[title*='모집 요강'], iframe[src*='GI_Read_Comt_Ifrm'], iframe[src*='GI_Read_Frame']"
+                        )
+                        if iframe_element:
+                            name_attr = await iframe_element.get_attribute("name")
+                            src_attr = await iframe_element.get_attribute("src")
 
-                    # JD 선택자로도 못 찾은 경우 전체 페이지 fallback
-                    if not jd_element:
-                        html = await page.content()
-                        soup = BeautifulSoup(html, "lxml")
-                        for selector in self.NOISE_SELECTORS:
-                            for el in soup.select(selector):
-                                el.decompose()
-                        raw_text = self._extract_jd_content(soup)
-                        success = len(raw_text.strip()) > 100
+                            frame = None
+                            if name_attr:
+                                frame = page.frame(name=name_attr)
+                            if not frame and src_attr:
+                                frame = next(
+                                    (f for f in page.frames if src_attr in f.url or f.url in src_attr), None
+                                )
+                            if frame:
+                                await frame.wait_for_load_state("networkidle")
+                                # iframe 내부 콘텐츠 확인
+                                iframe_html = await frame.content()
+                                iframe_soup = BeautifulSoup(iframe_html, "lxml")
 
-                await browser.close()
+                                # 불필요한 노이즈 제거 후 텍스트와 이미지 체크
+                                for selector in self.NOISE_SELECTORS:
+                                    if selector != "iframe":  # iframe 내부의 noise 제거
+                                        for el in iframe_soup.select(selector):
+                                            el.decompose()
 
-                # 3. 이미지 JD인 경우 VLM을 이용해 텍스트 추출 및 정제
-                if is_image_jd and screenshot_bytes:
-                    vlm_text = await llm_service.parse_jd_image(screenshot_bytes)
-                    if vlm_text:
-                        refined_text = await llm_service.refine_jd_text(vlm_text)
-                        raw_text = refined_text
-                        success = True
+                                iframe_text = iframe_soup.get_text(separator="\n", strip=True)
+                                iframe_images = iframe_soup.find_all("img")
 
-                return {
-                    "url": url,
-                    "title": title or "",
-                    "raw_text": self._clean_text(raw_text) if raw_text else "",
-                    "success": success,
-                    "error": None if success else "Could not extract content",
-                    "method": "playwright",
-                }
+                                # 텍스트가 매우 짧고 이미지가 많은 경우 이미지 JD로 판단
+                                if len(iframe_text.strip()) < 300 and len(iframe_images) > 0:
+                                    is_image_jd = True
+                                    # iframe 자체를 스크린샷 캡처
+                                    screenshot_bytes = await iframe_element.screenshot(type="png")
+                                else:
+                                    raw_text = iframe_text
+                                    success = len(raw_text.strip()) > 100
+
+                        # 2. 잡코리아가 아니거나 iframe이 없는 경우 일반 처리
+                        if not iframe_element or (is_image_jd and screenshot_bytes is None):
+                            # 일반 JD 선택자에서 내용 찾기
+                            jd_element = None
+                            for selector in self.JD_SELECTORS:
+                                el = await page.query_selector(selector)
+                                if el:
+                                    # 텍스트와 이미지 확인
+                                    el_html = await el.inner_html()
+                                    el_soup = BeautifulSoup(el_html, "lxml")
+
+                                    # 노이즈 제거
+                                    for noise in self.NOISE_SELECTORS:
+                                        if noise != "iframe":
+                                            for nel in el_soup.select(noise):
+                                                nel.decompose()
+
+                                    el_text = el_soup.get_text(separator="\n", strip=True)
+                                    el_images = el_soup.find_all("img")
+
+                                    if len(el_text.strip()) < 300 and len(el_images) > 0:
+                                        is_image_jd = True
+                                        screenshot_bytes = await el.screenshot(type="png")
+                                        jd_element = el
+                                        break
+                                    elif len(el_text.strip()) > 200:
+                                        jd_element = el
+                                        raw_text = el_text
+                                        success = True
+                                        break
+
+                            # JD 선택자로도 못 찾은 경우 전체 페이지 fallback
+                            if not jd_element:
+                                html = await page.content()
+                                soup = BeautifulSoup(html, "lxml")
+                                for selector in self.NOISE_SELECTORS:
+                                    for el in soup.select(selector):
+                                        el.decompose()
+                                raw_text = self._extract_jd_content(soup)
+                                success = len(raw_text.strip()) > 100
+
+                        await browser.close()
+                        return title, raw_text, success, screenshot_bytes, is_image_jd
+                        
+                return asyncio.run(_inner_scrape())
+
+            # 새 스레드에서 Playwright 전용 루프를 돌려 에러 원천 차단
+            title, raw_text, success, screenshot_bytes, is_image_jd = await asyncio.to_thread(run_in_new_loop)
+
+            # 3. 이미지 JD인 경우 VLM을 이용해 텍스트 추출 및 정제 (Uvicorn 기본 루프에서 처리)
+            if is_image_jd and screenshot_bytes:
+                vlm_text = await llm_service.parse_jd_image(screenshot_bytes)
+                if vlm_text:
+                    refined_text = await llm_service.refine_jd_text(vlm_text)
+                    raw_text = refined_text
+                    success = True
+
+            return {
+                "url": url,
+                "title": title or "",
+                "raw_text": self._clean_text(raw_text) if raw_text else "",
+                "success": success,
+                "error": None if success else "Could not extract content",
+                "method": "playwright",
+            }
 
         except Exception as e:
             import traceback
