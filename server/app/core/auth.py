@@ -34,33 +34,66 @@ def verify_token(token: str) -> dict:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
 ) -> AuthUser:
     """
     Extract authenticated user from JWT token.
     Raises HTTPException 401 if token is invalid or missing.
+    In local development, falls back to dev-user-123.
     """
-    token = credentials.credentials
-    payload = verify_token(token)
+    from app.core.config import settings
 
-    user_id = payload.get("sub")
-    username = payload.get("username")
-    email = payload.get("email")
-    picture = payload.get("picture")
-
-    if not user_id:
+    if not credentials:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+            return AuthUser(
+                user_id="dev-user-123",
+                username="DevUser",
+                email="dev@jobfit.local",
+                picture=None,
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User ID not found in token",
+            detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return AuthUser(
-        user_id=user_id,
-        username=username or "Unknown",
-        email=email,
-        picture=picture,
-    )
+    try:
+        token = credentials.credentials
+        payload = verify_token(token)
+
+        user_id = payload.get("sub")
+        username = payload.get("username")
+        email = payload.get("email")
+        picture = payload.get("picture")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User ID not found in token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return AuthUser(
+            user_id=user_id,
+            username=username or "Unknown",
+            email=email,
+            picture=picture,
+        )
+    except Exception as exc:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+            return AuthUser(
+                user_id="dev-user-123",
+                username="DevUser",
+                email="dev@jobfit.local",
+                picture=None,
+            )
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
 
 async def get_optional_user(
@@ -68,8 +101,18 @@ async def get_optional_user(
 ) -> OptionalUser:
     """
     Extract user from token if present, otherwise return unauthenticated user.
+    In local development, defaults to dev-user-123 as authenticated to ensure persistence.
     """
+    from app.core.config import settings
+
     if not credentials:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+            return OptionalUser(
+                user_id="dev-user-123",
+                username="DevUser",
+                email="dev@jobfit.local",
+                is_authenticated=True,
+            )
         return OptionalUser(is_authenticated=False)
 
     try:
@@ -87,7 +130,15 @@ async def get_optional_user(
                 email=email,
                 is_authenticated=True,
             )
-    except HTTPException:
+    except Exception:
         pass
+
+    if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+        return OptionalUser(
+            user_id="dev-user-123",
+            username="DevUser",
+            email="dev@jobfit.local",
+            is_authenticated=True,
+        )
 
     return OptionalUser(is_authenticated=False)
