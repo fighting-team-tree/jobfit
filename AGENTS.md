@@ -96,6 +96,29 @@ Refs: #이슈번호 (선택)
 - `.agent/memory/active_context.md`에는 최근 작업, 구현 상태 및 다음 단계를 갱신합니다.
 - 아키텍처/명령/환경 변수 변경은 `.agent/memory/tech_spec.md` 또는 관련 docs에 반영합니다.
 
+## 에이전트 공통 로컬 구조 (.agent)
+
+```text
+.agent/
+├── memory/                     # 구현 현황 및 아키텍처 명세 (Source of Truth)
+│   ├── active_context.md       # 최근 작업 로그 및 진행 상태
+│   ├── tech_spec.md            # 아키텍처 및 설정 스펙
+│   ├── api_schema.md           # API/WebSocket 스키마
+│   └── memory_audit.md         # 메모리 표면 및 캐시 관리 상태
+├── rules/                      # 에이전트 행동 세부 규칙 (대시 포맷)
+│   ├── 00-multi-tool-sync.md   # 다중 툴 동기화 규칙
+│   ├── 01-language-preference.md # 한국어 우선 및 기술영어 지침
+│   ├── 02-python-uv.md         # Python uv 관리 규칙
+│   ├── 03-git-convention.md    # 커밋 메시지 및 브랜치 규칙
+│   ├── 04-security-pii.md      # PII 마스킹 및 .env 접근 금지 규칙
+│   ├── 05-project-structure.md # 프로젝트 디렉토리 및 핵심 파일 맵
+│   ├── 06-git-branch-strategy.md # 협업 브랜치 전략
+│   └── 07-continuous-documentation.md # 지속적 문서 갱신 규칙
+└── skills/                     # 에이전트 전용 스킬 라이브러리
+```
+
+에이전트가 프로젝트 분석이나 수정을 시작할 때, 최우선적으로 `.agent/memory/active_context.md` 및 `.agent/rules/` 하위 규정들을 준수해야 합니다.
+
 ## Codex 로컬 구조
 
 ```text
@@ -114,3 +137,4 @@ Refs: #이슈번호 (선택)
 ```
 
 Codex에서 프로젝트 규칙이 필요하면 먼저 이 파일과 `.codex/README.md`를 읽고, 세부 작업에 맞는 `.codex/rules/` 또는 `.codex/skills/` 파일을 사용합니다.
+

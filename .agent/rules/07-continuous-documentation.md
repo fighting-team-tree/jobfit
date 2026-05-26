@@ -23,5 +23,12 @@
 - 완료된 작업 항목을 `[x]`로 체크한다.
 - 작업 도중 발견된 새로운 할 일이나 하위 작업이 있다면 목록에 추가한다.
 
+### E. Major Project Documents Update (`AGENTS.md`, `CLAUDE.md`, `README.md`)
+- 의미 있는 기능 변경이나 설정 변경이 완료되면 다음 문서들을 반드시 검토하고 업데이트해야 한다.
+  - **`README.md`**: 프로젝트 개요, 주요 기능, 설치 및 실행 방법, API 요약 (User-facing)
+  - **`CLAUDE.md`**: 개발 가이드, 명령어, 코드 스타일, 아키텍처 (Hybrid Agent용)
+  - **`AGENTS.md`**: Codex 컨텍스트, 구현 지침, 핵심 파일 매핑 (Codex entrypoint)
+- **Pre-Commit Verification**: `git commit` 명령을 제안하기 전에, 위 문서들이 변경 사항을 **올바르게 반영하고 있는지** 반드시 확인해야 한다.
+
 ## 3. Purpose (목적)
-- 에이전트(Antigravity)가 언제든지 이 메모리 파일들을 읽고("context loading"), 현재 상황을 완벽하게 파악하여 불필요한 문맥 파악 시간을 줄이고 정확한 답변을 제공하기 위함이다.
+- 에이전트(Antigravity) 및 협업 에이전트들이 언제든지 이 메모리 파일들을 읽고("context loading"), 현재 상황을 완벽하게 파악하여 불필요한 문맥 파악 시간을 줄이고 정확한 답변을 제공하기 위함이다.
