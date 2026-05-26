@@ -4,6 +4,19 @@
 - **Phase:** Runtime safety hardening
 - **Goal:** Keep LLM, demo persistence, and GitHub token flows aligned with JobFit's security/PII rules while preserving the current demo UX.
 
+## Feature Implementation Status
+### ✅ 완료 (Completed)
+- 이력서 파싱 (텍스트, PDF, 이미지 분석)
+- JD URL 스크래핑 및 텍스트 정제 (httpx + Playwright 폴백)
+- 임베딩 기반 갭 분석 및 결정적 가중치 스코어링 (NV-Embed + Cosine Similarity)
+- Claude Agent 기반 주차별 로드맵 생성 및 연습 문제 생성/평가
+- ElevenLabs WebSocket 및 Deepgram STT 기반 실시간 AI 음성 면접 연습
+- GitHub 프로필 분석 및 매칭
+- 프론트엔드 UI/UX (Dashboard, Profile, Companies, Roadmap, Interview, Problem 페이지)
+
+### 🔄 진행 중 (In Progress)
+- (없음 - 전체 핵심 기능 구현 및 연동 완료)
+
 ## Recent Actions
 - **Git Convention Fix:**
   - Identified the cause of the convention miss: runtime/Lore-style first lines were allowed to replace the project-required `type(scope): subject` header.

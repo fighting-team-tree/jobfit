@@ -4,6 +4,7 @@ Skill Matcher Service
 Uses embedding similarity to deterministically match skills between profile and JD.
 """
 
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -40,16 +41,56 @@ class MatchResult:
 
 
 class SkillMatcherService:
-    """Service for matching skills using embedding similarity."""
+    """Service for matching skills using embedding similarity and rule-based fallback."""
 
     # Thresholds for skill matching
-    # Based on empirical analysis: CV <-> Computer Vision ~0.55, CV <-> BERT ~0.46
-    REQUIRED_THRESHOLD = 0.53  # Lowered based on NVIDIA E5-v5 short-text behavior
-    PREFERRED_THRESHOLD = 0.48  # Lowered further
+    REQUIRED_THRESHOLD = 0.53
+    PREFERRED_THRESHOLD = 0.48
 
     # Score weights
     REQUIRED_WEIGHT = 70
     PREFERRED_WEIGHT = 30
+
+    # Technology synonym mappings for cross-lingual (English/Korean) and abbreviation matching
+    TECH_SYNONYMS = {
+        "langchain": ["랭체인", "langchain"],
+        "react": ["리액트", "react", "react.js"],
+        "vue": ["뷰", "vue.js", "vuejs", "vue"],
+        "python": ["파이썬", "python"],
+        "pytorch": ["파이토치", "pytorch"],
+        "tensorflow": ["텐서플로우", "tensorflow"],
+        "kubernetes": ["쿠버네티스", "k8s", "kubernetes"],
+        "docker": ["도커", "docker"],
+        "typescript": ["타입스크립트", "typescript", "ts"],
+        "javascript": ["자바스크립트", "javascript", "js"],
+        "fastapi": ["패스트api", "fastapi"],
+        "django": ["장고", "django"],
+        "flask": ["플라스크", "flask"],
+        "spring": ["스프링", "spring boot", "springboot", "spring"],
+        "node": ["노드", "node.js", "nodejs", "node"],
+        "nextjs": ["넥스트", "next.js", "nextjs"],
+        "aws": ["아마존", "aws", "amazon web services"],
+    }
+
+    # Target keywords that indicate academic/research requirements (in JD skills)
+    RESEARCH_JD_KEYWORDS = ["연구", "research", "r&d", "논문", "thesis"]
+
+    # Profile keywords that prove academic/research competency (in applicant's profile text)
+    RESEARCH_PROFILE_KEYWORDS = [
+        "연구",
+        "research",
+        "r&d",
+        "논문",
+        "학회",
+        "thesis",
+        "lab",
+        "연구소",
+        "석사",
+        "박사",
+        "patent",
+        "특허",
+        "학부연구생",
+    ]
 
     async def match_skills(
         self,
@@ -58,9 +99,10 @@ class SkillMatcherService:
         preferred_skills: list[str],
         required_threshold: float | None = None,
         preferred_threshold: float | None = None,
+        profile_raw: dict | str | None = None,
     ) -> MatchResult:
         """
-        Match profile skills against JD requirements using embedding similarity.
+        Match profile skills against JD requirements using embedding similarity and fallback text rules.
 
         Args:
             profile_skills: Skills from the user's profile
@@ -68,12 +110,18 @@ class SkillMatcherService:
             preferred_skills: Preferred/nice-to-have skills from JD
             required_threshold: Custom threshold for required skills
             preferred_threshold: Custom threshold for preferred skills
-
-        Returns:
-            MatchResult with detailed matching information
+            profile_raw: Raw profile dictionary or text for domain context verification
         """
         req_threshold = required_threshold or self.REQUIRED_THRESHOLD
         pref_threshold = preferred_threshold or self.PREFERRED_THRESHOLD
+
+        # Extract plain text context from profile_raw for domain verification
+        profile_context = ""
+        if profile_raw:
+            if isinstance(profile_raw, str):
+                profile_context = profile_raw
+            elif isinstance(profile_raw, dict):
+                profile_context = json.dumps(profile_raw, ensure_ascii=False)
 
         # Get embeddings for all skills
         profile_emb = (
@@ -94,12 +142,22 @@ class SkillMatcherService:
 
         # Match required skills
         matching_required, missing_required = self._match_skill_set(
-            profile_skills, profile_emb, required_skills, required_emb, req_threshold
+            profile_skills,
+            profile_emb,
+            required_skills,
+            required_emb,
+            req_threshold,
+            profile_context,
         )
 
         # Match preferred skills
         matching_preferred, missing_preferred = self._match_skill_set(
-            profile_skills, profile_emb, preferred_skills, preferred_emb, pref_threshold
+            profile_skills,
+            profile_emb,
+            preferred_skills,
+            preferred_emb,
+            pref_threshold,
+            profile_context,
         )
 
         # Calculate scores
@@ -144,6 +202,7 @@ class SkillMatcherService:
         target_skills: list[str],
         target_emb: np.ndarray,
         threshold: float,
+        profile_context: str = "",
     ) -> tuple[list[str], list[str]]:
         """
         Match a set of target skills against profile skills.
@@ -164,15 +223,63 @@ class SkillMatcherService:
         missing = []
 
         for j, target_skill in enumerate(target_skills):
-            # Get max similarity for this target skill across all profile skills
-            max_sim = similarity[:, j].max()
+            max_sim = similarity[:, j].max() if len(similarity) > 0 else 0.0
 
-            if max_sim >= threshold:
-                matched.append(target_skill)
+            # 1. Embedding-based match check
+            is_matched = max_sim >= threshold
+
+            # 2. Text/Synonym-based match check (fallback if embedding fails)
+            if not is_matched:
+                is_matched = self._is_text_match(profile_skills, target_skill)
+
+            # 3. Domain validation (e.g., check research context if skill requires research)
+            if is_matched:
+                if self._verify_research_domain(target_skill, profile_context):
+                    matched.append(target_skill)
+                else:
+                    missing.append(target_skill)
             else:
                 missing.append(target_skill)
 
         return matched, missing
+
+    def _is_text_match(self, profile_skills: list[str], target_skill: str) -> bool:
+        """
+        Check if target_skill matches any of profile_skills based on synonyms or substrings.
+        """
+        t_clean = target_skill.lower().replace(" ", "")
+
+        # 1. Check technology synonym dictionary
+        for _, synonyms in self.TECH_SYNONYMS.items():
+            has_synonym_in_target = any(syn in t_clean for syn in synonyms)
+            if has_synonym_in_target:
+                for p_skill in profile_skills:
+                    p_clean = p_skill.lower().replace(" ", "")
+                    if p_clean in synonyms or any(syn in p_clean for syn in synonyms):
+                        return True
+
+        # 2. Check simple substring mapping for custom terms
+        for p_skill in profile_skills:
+            p_clean = p_skill.lower().replace(" ", "")
+            if p_clean and (p_clean in t_clean or t_clean in p_clean):
+                return True
+
+        return False
+
+    def _verify_research_domain(self, target_skill: str, profile_context: str) -> bool:
+        """
+        Verify if the profile has research context if target_skill requires research competency.
+        """
+        t_clean = target_skill.lower().replace(" ", "")
+        requires_research = any(kw in t_clean for kw in self.RESEARCH_JD_KEYWORDS)
+
+        if not requires_research:
+            return True
+
+        p_context_clean = profile_context.lower()
+        has_research_exp = any(kw in p_context_clean for kw in self.RESEARCH_PROFILE_KEYWORDS)
+
+        return has_research_exp
 
     def get_match_details(
         self,
@@ -183,11 +290,6 @@ class SkillMatcherService:
     ) -> list[dict]:
         """
         Get detailed matching information for debugging/display.
-
-        Returns list of dicts with:
-            - target_skill: The skill being matched
-            - best_match: Best matching profile skill
-            - similarity: Similarity score
         """
         if len(target_skills) == 0 or len(profile_skills) == 0:
             return []

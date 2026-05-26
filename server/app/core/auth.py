@@ -44,7 +44,7 @@ async def get_current_user(
     from app.core.config import settings
 
     if not credentials:
-        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"} and not settings.TEST_MODE:
             return AuthUser(
                 user_id="dev-user-123",
                 username="DevUser",
@@ -80,7 +80,7 @@ async def get_current_user(
             picture=picture,
         )
     except Exception as exc:
-        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"} and not settings.TEST_MODE:
             return AuthUser(
                 user_id="dev-user-123",
                 username="DevUser",
@@ -106,7 +106,7 @@ async def get_optional_user(
     from app.core.config import settings
 
     if not credentials:
-        if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+        if settings.ENVIRONMENT.lower() not in {"production", "prod"} and not settings.TEST_MODE:
             return OptionalUser(
                 user_id="dev-user-123",
                 username="DevUser",
@@ -130,10 +130,10 @@ async def get_optional_user(
                 email=email,
                 is_authenticated=True,
             )
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
-    if settings.ENVIRONMENT.lower() not in {"production", "prod"}:
+    if settings.ENVIRONMENT.lower() not in {"production", "prod"} and not settings.TEST_MODE:
         return OptionalUser(
             user_id="dev-user-123",
             username="DevUser",

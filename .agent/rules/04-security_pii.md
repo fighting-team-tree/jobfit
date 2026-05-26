@@ -18,3 +18,9 @@
 ## 3. Data Handling
 - Do not store unmasked PII in logs.
 - Resume files processed in background tasks should be cleaned immediately after text extraction.
+
+## 4. Environment Variables (.env) Handling & Resolution
+- **Do not read/access:** AI agents must not view, open, or read the real `.env` file directly under any circumstances to prevent credential leaks.
+- **Drift/Discrepancy Resolution:**
+  - If a discrepancy is suspected between `.env` and `.env.example` (e.g., config error, missing key), the agent must inspect `config.py` against `.env.example` to identify missing variables.
+  - The agent must report the list of missing variable names to the user and prompt the user to manually add/update them in `.env`. The agent must never write to or read from the `.env` file directly.

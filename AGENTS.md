@@ -82,14 +82,18 @@ Refs: #이슈번호 (선택)
 - LLM 또는 외부 API로 이력서/사용자 데이터를 보내기 전에 이메일, 전화번호 등 PII를 마스킹합니다.
 - 로그에 원본 PII, API key, JWT secret, OAuth token을 남기지 않습니다.
 - URL 스크래핑/JD 수집 코드는 SSRF 방어를 유지해야 합니다.
+- **AI 에이전트 `.env` 직접 읽기 금지**: AI 에이전트는 기밀 유출 방지를 위해 실젯값이 포함된 `.env` 파일을 직접 열람하거나 가로채지 않아야 하며, 환경 변수 점검 시 오직 `config.py`와 `.env.example`만 참조합니다.
+- **환경 변수 불일치 해소**: `.env.example`과 `.env` 간의 누락이나 불일치가 의심되면, AI는 직접 `.env`를 들여다보지 않고 분석한 필요한 변수 목록을 사용자에게 제시하여 사용자가 직접 수동 수정하도록 안내합니다.
 - `.env`는 로컬 전용이며 `.env.example`만 문서화합니다.
 
 ## 문서와 메모리
 
-의미 있는 기능/설정 변경 후 다음을 확인합니다.
+프로젝트의 기능별 구현 현황 및 개발 진행 상태는 개별 설명 문서에 하드코딩하여 중복 관리하지 않으며, [active_context.md](file:///c:/Users/fkjy1/dev/Hackathon/jobfit/.agent/memory/active_context.md)를 단일 진입점(Source of Truth)으로 관리 및 참조합니다.
+
+의미 있는 기능/설정 변경 후 다음을 확인합니다:
 
 - `README.md`, `AGENTS.md`, `CLAUDE.md` 중 영향받는 문서가 최신인지 확인합니다.
-- `.agent/memory/active_context.md`에는 최근 작업과 다음 단계를 갱신합니다.
+- `.agent/memory/active_context.md`에는 최근 작업, 구현 상태 및 다음 단계를 갱신합니다.
 - 아키텍처/명령/환경 변수 변경은 `.agent/memory/tech_spec.md` 또는 관련 docs에 반영합니다.
 
 ## Codex 로컬 구조

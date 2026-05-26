@@ -1,9 +1,12 @@
 # JobFit Task List
 
 ## Current
-- [x] Git 커밋 메시지 첫 줄을 `type(scope): subject`로 강제하는 검증 훅 추가
-- [x] `.agent`, `.codex`, `.claude`, `AGENTS.md`의 Git 컨벤션 우선순위 문구 정리
-- [x] `.agent/memory/active_context.md`, `tech_spec.md`, `api_schema.md`를 현재 코드 기준으로 갱신
+- [x] 하이브리드 스킬 매칭을 위한 동의어 사전 및 규칙 구성
+- [x] `SkillMatcherService` (skill_matcher_service.py)에 하이브리드 매칭 및 연구 도메인 추가 검증 구현
+- [x] `LLMService` (llm_service.py)의 `analyze_gap`에서 프로필 원본 데이터를 `match_skills`로 전달하도록 파라미터 보완
+- [x] 테스트 스크립트를 작성하여 한영 크로스 매칭 및 연구/개발 분리 시나리오 유효성 검증
+- [x] `make test` 및 `make lint`를 실행하여 통합 검증 수행
+- [x] 작업 완료 후 `walkthrough.md` 작성 및 보고
 - [x] `.agent/memory/memory_audit.md`로 프로젝트 메모리 표면과 리스크 정리
 
 ## Follow-up

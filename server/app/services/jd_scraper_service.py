@@ -178,17 +178,19 @@ class JDScraperService:
     async def _scrape_with_playwright(self, url: str) -> dict:
         """Fallback scraping with Playwright for JS-rendered sites."""
         try:
-            from app.services.llm_service import llm_service
             import asyncio
             import sys
-            
+
+            from app.services.llm_service import llm_service
+
             def run_in_new_loop():
                 if sys.platform == "win32":
                     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-                
+
                 async def _inner_scrape():
-                    from playwright.async_api import async_playwright
                     from bs4 import BeautifulSoup
+                    from playwright.async_api import async_playwright
+
                     async with async_playwright() as p:
                         browser = await p.chromium.launch(headless=True)
                         # 넉넉한 viewport 크기 설정
@@ -246,7 +248,12 @@ class JDScraperService:
                                 frame = page.frame(name=name_attr)
                             if not frame and src_attr:
                                 frame = next(
-                                    (f for f in page.frames if src_attr in f.url or f.url in src_attr), None
+                                    (
+                                        f
+                                        for f in page.frames
+                                        if src_attr in f.url or f.url in src_attr
+                                    ),
+                                    None,
                                 )
                             if frame:
                                 await frame.wait_for_load_state("networkidle")
@@ -315,11 +322,13 @@ class JDScraperService:
 
                         await browser.close()
                         return title, raw_text, success, screenshot_bytes, is_image_jd
-                        
+
                 return asyncio.run(_inner_scrape())
 
             # 새 스레드에서 Playwright 전용 루프를 돌려 에러 원천 차단
-            title, raw_text, success, screenshot_bytes, is_image_jd = await asyncio.to_thread(run_in_new_loop)
+            title, raw_text, success, screenshot_bytes, is_image_jd = await asyncio.to_thread(
+                run_in_new_loop
+            )
 
             # 3. 이미지 JD인 경우 VLM을 이용해 텍스트 추출 및 정제 (Uvicorn 기본 루프에서 처리)
             if is_image_jd and screenshot_bytes:

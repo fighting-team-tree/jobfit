@@ -75,10 +75,17 @@ jobfit/
 
 | Method | Endpoint | 용도 |
 |--------|----------|------|
-| POST | `/api/v1/analyze/resume` | 텍스트 이력서 분석 |
-| POST | `/api/v1/analyze/resume/file` | 파일 이력서 분석 |
-| POST | `/api/v1/analyze/jd/url` | URL에서 JD 스크래핑 |
-| POST | `/api/v1/analyze/gap` | 갭 분석 |
+| POST | `/api/v1/auth/google` / `/refresh` | OAuth 로그인 및 토큰 갱신 |
+| POST | `/api/v1/analyze/resume/file` | 이력서 파일 파싱 및 분석 |
+| POST | `/api/v1/analyze/jd/url` | JD 스크래핑 및 텍스트 정제 |
+| POST | `/api/v1/analyze/gap` | 임베딩 기반 갭 분석 및 매칭 |
+| GET/PUT | `/api/v1/profile/me` | 프로필 정보 관리 및 DB/데모 폴백 저장 |
+| GET/POST| `/api/v1/companies/` | 관심 기업/채용 공고 등록 및 조회 |
+| POST | `/api/v1/roadmap/generate` / `/agent` | AI 로드맵 생성 (기본/에이전트) |
+| POST | `/api/v1/roadmap/problems/generate` | 주차별 연습 문제 생성 (coding/quiz) |
+| POST | `/api/v1/roadmap/evaluate` | 문제 솔루션 채점 및 피드백 |
+| GET/POST| `/api/v1/interview/sessions` | 면접 세션 생성 및 조회 |
+| WS | `/api/v1/interview/stream` | 실시간 음성 면접 스트림 (ElevenLabs/Deepgram) |
 
 ---
 
@@ -117,16 +124,8 @@ ELEVENLABS_API_KEY=...
 
 ## 현재 구현 상태
 
-### ✅ 완료
-- 이력서 파싱 (텍스트, PDF, 이미지)
-- JD URL 스크래핑 (httpx + Playwright 폴백)
-- 갭 분석 (가중치 기반 점수)
-- 기본 UI (Dashboard, Profile 페이지)
-
-### 🔄 진행 중
-- 학습 로드맵 생성
-- AI 면접 연습 (음성)
-- GitHub 프로필 분석
+프로젝트의 기능별 세부 구현 현황 및 개발 진행 상태는 수시로 갱신되는 아래 메인 메모리 문서를 참조하십시오:
+👉 [active_context.md (기능 구현 상태)](file:///c:/Users/fkjy1/dev/Hackathon/jobfit/.agent/memory/active_context.md)
 
 ---
 
@@ -198,14 +197,12 @@ curl -X POST http://localhost:8000/api/v1/analyze/jd/url \
 
 | 파일 | 내용 |
 |------|------|
+| `00-multi-tool-sync.md` | AI 툴 동기화 규칙 |
 | `01-korean.md` | 한국어 우선 커뮤니케이션 |
 | `02-python-uv.md` | Python uv 패키지 관리 필수 |
 | `03-git-convention.md` | LLM-Optimized WHY/WHAT/IMPACT 커밋 컨벤션 |
 | `04-security.md` | PII 마스킹, API 키 보안 |
 | `05-project-structure.md` | 디렉토리 구조 및 핵심 파일 |
-| `06-api-patterns.md` | API 엔드포인트 패턴 |
-| `07-claude-agent.md` | LangGraph 에이전트 규칙 |
-| `08-embedding-matching.md` | 임베딩 기반 스킬 매칭 |
 
 ---
 

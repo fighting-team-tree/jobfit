@@ -258,6 +258,7 @@ JSON만 응답하세요."""
             profile_skills=profile_skills,
             required_skills=required_skills,
             preferred_skills=preferred_skills,
+            profile_raw=safe_profile,
         )
 
         feedback = await self._generate_feedback(match_result, safe_profile, safe_jd_text)
