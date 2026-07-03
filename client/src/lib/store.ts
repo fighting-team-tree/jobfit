@@ -3,7 +3,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse, Problem } from './api';
+import type { ProfileStructured, ResumeFileResponse, GapAnalysis, GitHubAnalysisResponse, Problem, PrepareCodeReviewResponse } from './api';
 import { profileAPI } from './api';
 
 // ============ Profile Store ============
@@ -197,8 +197,8 @@ interface InterviewState {
   // Code Review State
   isCodeReviewMode: boolean;
   selectedRepo: string | null;
-  recommendedRepos: Array<Record<string, unknown>>;
-  allRepos: Array<Record<string, unknown>>;
+  recommendedRepos: PrepareCodeReviewResponse['recommended_repos'];
+  allRepos: PrepareCodeReviewResponse['all_repos'];
 
   // Actions
   setPersona: (persona: 'professional' | 'friendly' | 'challenging') => void;
@@ -212,8 +212,8 @@ interface InterviewState {
   // Code Review Actions
   setIsCodeReviewMode: (mode: boolean) => void;
   setSelectedRepo: (repo: string | null) => void;
-  setRecommendedRepos: (repos: Array<Record<string, unknown>>) => void;
-  setAllRepos: (repos: Array<Record<string, unknown>>) => void;
+  setRecommendedRepos: (repos: PrepareCodeReviewResponse['recommended_repos']) => void;
+  setAllRepos: (repos: PrepareCodeReviewResponse['all_repos']) => void;
 }
 
 export const useInterviewStore = create<InterviewState>()((set) => ({
