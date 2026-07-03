@@ -13,6 +13,7 @@
 - ElevenLabs WebSocket 및 Deepgram STT 기반 실시간 AI 음성 면접 연습
 - GitHub 프로필 분석 및 매칭
 - 프론트엔드 UI/UX (Dashboard, Profile, Companies, Roadmap, Interview, Problem 페이지)
+- **GitHub 연동 코드 리뷰 면접 기능**: JD 적합도 기반 AI 저장소 추천, 소스 파일 분석 요약(Brief) 생성 및 음성 면접관 시스템 프롬프트(overrides) 주입 연동 완료.
 
 ### 🔄 진행 중 (In Progress)
 - (없음 - 전체 핵심 기능 구현 및 연동 완료)
@@ -40,15 +41,17 @@
   - Added `ExpiringStore` TTL/LRU behavior for demo profile/company stores, interview sessions, and roadmap/problem fallback stores.
   - Changed embedding cache to hashed keys with TTL/LRU eviction so raw resume/JD text is not retained as cache keys.
   - Bounded WebSocket audio buffering with oldest-chunk drop behavior and reliable stop-sentinel enqueueing.
-  - Added TTL/cap migrations for browser interview history and generated problem caches; persisted interview summaries are stripped.
-
+  - Bounded browser interview history and generated problem caches; persisted interview summaries are stripped.
+- **GitHub Code Review Interview:**
+  - Added repository-level JD matching and scoring heuristics (`github_service.py`).
+  - Implemented source tree traversal scoring and LLM prompt summarization (`code_review_service.py`).
+  - Integrated code-review summary context into interviewer prompts and ElevenLabs agent session startup.
+  - Created a Code Review Mode toggle and AI recommendations vs. manual selection UI in the frontend (`InterviewPage.tsx`, `store.ts`, `api.ts`).
 
 - **Codex Review Skills:**
   - Added repo-local `.codex/skills` for architecture, security/privacy, AI pipeline, frontend product, and test/QA review.
   - Updated `.codex/README.md` and `AGENTS.md` so future Codex runs can discover the expanded review skill set.
 
 ## Next Steps
-- Do not rewrite already-pushed commit history unless explicitly requested; use the new validator to prevent future misses.
-- Remaining risk: runtime stores and browser caches are now bounded, but production durability still needs DB/Redis/object storage rather than process memory/localStorage.
-- Remaining risk: `jobfit_github_config` keeps non-secret repo metadata in localStorage; consider server-side config if repo metadata becomes sensitive.
-- Run normal validation (`make lint`, `make test`, frontend lint/build) when source behavior changes, not for documentation-only updates unless needed.
+- Verify the system end-to-end with real user voice sessions and ensure the LLM follows the injected code review details in conversation.
+- Address caching of git code briefs if repeat code review interviews on the same repositories become a performance issue.
