@@ -4,6 +4,7 @@ import { Mic, Phone, PhoneOff, Volume2, Loader2, AlertCircle, Settings, Clock, M
 import { useConversation } from '@elevenlabs/react';
 import { analysisAPI, interviewAPI } from '../lib/api';
 import { useProfileStore, useInterviewStore } from '../lib/store';
+import type { ProfileStructured } from '../lib/api';
 
 const API_BASE = import.meta.env.VITE_API_URL ||
     (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8000/api/v1');
@@ -228,10 +229,12 @@ const DEFAULT_CHECKLIST = [
 
 export default function InterviewPage() {
     const navigate = useNavigate();
-    const { profile: resumeAnalysis, setProfile } = useProfileStore();
+    const { profile: resumeAnalysis, setProfile, githubUrl } = useProfileStore();
     const {
         startSession, endSession, addMessage, clearConversation,
         conversation: chatHistory, persona, jdText, profileData,
+        isCodeReviewMode, setIsCodeReviewMode, selectedRepo, setSelectedRepo,
+        recommendedRepos, setRecommendedRepos, allRepos, setAllRepos
     } = useInterviewStore();
 
     const [status, setStatus] = useState<string>('준비');
@@ -240,6 +243,7 @@ export default function InterviewPage() {
     const [isAutoLoading, setIsAutoLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isEnding, setIsEnding] = useState(false);
+    const [isLoadingRepos, setIsLoadingRepos] = useState(false);
 
     // TEST_MODE 상태
     const [testMode, setTestMode] = useState(false);
@@ -298,6 +302,31 @@ export default function InterviewPage() {
             setCustomTopics(prev => [...prev, trimmed]);
             setSelectedTopics(prev => new Set(prev).add(trimmed));
             setCustomTopic('');
+        }
+    };
+
+    // [신규] 코드 리뷰 토글
+    const handleToggleCodeReview = async () => {
+        const newMode = !isCodeReviewMode;
+        setIsCodeReviewMode(newMode);
+        
+        if (newMode && githubUrl && recommendedRepos.length === 0) {
+            setIsLoadingRepos(true);
+            try {
+                const res = await interviewAPI.prepareCodeReview(githubUrl, jdText || '');
+                setRecommendedRepos(res.recommended_repos);
+                setAllRepos(res.all_repos);
+                if (res.recommended_repos.length > 0) {
+                    setSelectedRepo(res.recommended_repos[0].full_name);
+                } else if (res.all_repos.length > 0) {
+                    setSelectedRepo(res.all_repos[0].full_name);
+                }
+            } catch (err) {
+                console.error("Code review prep error:", err);
+                setError("저장소 목록을 불러오는 데 실패했습니다.");
+            } finally {
+                setIsLoadingRepos(false);
+            }
         }
     };
 
@@ -438,6 +467,22 @@ export default function InterviewPage() {
                 ? `\n\n## 기업 면접 스타일 (${selectedCompany})\n${companyPreset.style}`
                 : '';
 
+            let githubBrief = '';
+            if (isCodeReviewMode && selectedRepo) {
+                setStatus('코드 분석 중...');
+                const startRes = await interviewAPI.startInterview(
+                    effectiveProfile as ProfileStructured,
+                    jdText || '',
+                    interviewType === 'behavioral' ? 'friendly' : 'professional',
+                    5,
+                    selectedRepo
+                );
+                if (startRes.github_brief) {
+                    githubBrief = `\n\n## GitHub Code Review Brief\n이 지원자는 다음 코드를 작성했습니다. 코드를 바탕으로 기술적인 깊이와 설계 의도를 묻는 면접 질문을 최소 1개 이상 던지세요.\n\n${startRes.github_brief}`;
+                }
+                setStatus('연결 중...');
+            }
+
             // 시스템 프롬프트를 코드에서 직접 override
             const systemPrompt = `You are a senior technical interviewer at a leading Korean IT company. Your name is 김면접. You conduct interviews in Korean.
 
@@ -462,6 +507,7 @@ ${profileSummary}
 ${jdSummary}
 ${focusSection}
 ${companySection}
+${githubBrief}
 
 ## Priority Rules
 - ALWAYS base your questions on the candidate's profile above. Reference their specific skills, projects, and experience.
@@ -877,6 +923,61 @@ ${companySection}
                                 )}
                             </div>
                         )}
+
+                        {/* ============ 코드 리뷰 모드 ============ */}
+                        <div className="mb-8 max-w-lg mx-auto text-left">
+                            <div className="flex items-center gap-3 mb-3">
+                                <p className="text-sm text-neutral-400 flex items-center gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    코드 리뷰 추가 <span className="text-neutral-600">(선택사항)</span>
+                                </p>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" className="sr-only peer" checked={isCodeReviewMode} onChange={handleToggleCodeReview} />
+                                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-300 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500"></div>
+                                </label>
+                            </div>
+                            
+                            {isCodeReviewMode && (
+                                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                    {!githubUrl ? (
+                                        <p className="text-sm text-amber-400">GitHub URL이 프로필에 설정되어 있지 않습니다. 설정에서 추가해주세요.</p>
+                                    ) : isLoadingRepos ? (
+                                        <div className="flex items-center gap-2 text-sm text-neutral-400">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>저장소를 분석하여 추천하는 중...</span>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <p className="text-xs text-neutral-400">면접관이 선택한 저장소의 소스 코드를 바탕으로 맞춤형 기술/설계 질문을 던집니다.</p>
+                                            <select 
+                                                value={selectedRepo || ''} 
+                                                onChange={(e) => setSelectedRepo(e.target.value)}
+                                                className="w-full bg-neutral-900 border border-white/20 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500"
+                                            >
+                                                {recommendedRepos.length > 0 && (
+                                                    <optgroup label="AI 추천 저장소 (채용공고 직무 적합도 순)">
+                                                        {recommendedRepos.map((repo) => (
+                                                            <option key={repo.full_name} value={repo.full_name}>
+                                                                ⭐ {repo.name} ({repo.language || 'Unknown'})
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
+                                                {allRepos.length > 0 && (
+                                                    <optgroup label="모든 저장소">
+                                                        {allRepos.map((repo) => (
+                                                            <option key={repo.full_name} value={repo.full_name}>
+                                                                {repo.name}
+                                                            </option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
                         <button
                             onClick={handlePreStartInterview}

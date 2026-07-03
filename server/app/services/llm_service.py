@@ -354,7 +354,12 @@ JSON만 응답하세요."""
         return await self.call_llm_json(prompt, temperature=0.3)
 
     async def generate_interview_question(
-        self, profile: dict, jd_text: str, conversation_history: list, persona: str = "professional"
+        self,
+        profile: dict,
+        jd_text: str,
+        conversation_history: list,
+        persona: str = "professional",
+        github_brief: str | None = None,
     ) -> str:
         """Generate an interview question with follow-up and adaptive difficulty."""
         safe_profile = mask_pii_payload(profile)
@@ -373,6 +378,12 @@ JSON만 응답하세요."""
             ]
         )
 
+        github_context = (
+            f"\n[GitHub Code Review Brief]\n{github_brief}\n- 위 GitHub 분석 결과를 바탕으로, 지원자의 실제 코드 작성 패턴이나 아키텍처 의도에 대해 구체적이고 날카로운 꼬리 질문을 던지세요."
+            if github_brief
+            else ""
+        )
+
         prompt = f"""{persona_prompts.get(persona, persona_prompts["professional"])}
 
 지원자 프로필:
@@ -380,7 +391,7 @@ JSON만 응답하세요."""
 
 채용공고:
 {safe_jd_text}
-
+{github_context}
 대화 기록:
 {history_text}
 

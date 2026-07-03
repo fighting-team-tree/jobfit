@@ -194,6 +194,12 @@ interface InterviewState {
   jdText: string;
   profileData: Record<string, unknown> | null;
 
+  // Code Review State
+  isCodeReviewMode: boolean;
+  selectedRepo: string | null;
+  recommendedRepos: Array<Record<string, unknown>>;
+  allRepos: Array<Record<string, unknown>>;
+
   // Actions
   setPersona: (persona: 'professional' | 'friendly' | 'challenging') => void;
   setInterviewContext: (profile: Record<string, unknown>, jdText: string) => void;
@@ -202,6 +208,12 @@ interface InterviewState {
   addMessage: (role: 'interviewer' | 'user', content: string) => void;
   endSession: () => void;
   clearConversation: () => void;
+
+  // Code Review Actions
+  setIsCodeReviewMode: (mode: boolean) => void;
+  setSelectedRepo: (repo: string | null) => void;
+  setRecommendedRepos: (repos: Array<Record<string, unknown>>) => void;
+  setAllRepos: (repos: Array<Record<string, unknown>>) => void;
 }
 
 export const useInterviewStore = create<InterviewState>()((set) => ({
@@ -214,6 +226,10 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
   conversation: [],
   jdText: '',
   profileData: null,
+  isCodeReviewMode: false,
+  selectedRepo: null,
+  recommendedRepos: [],
+  allRepos: [],
 
   setPersona: (persona) => set({ persona }),
   setInterviewContext: (profile, jdText) => set({ profileData: profile, jdText }),
@@ -242,6 +258,11 @@ export const useInterviewStore = create<InterviewState>()((set) => ({
     // conversation 유지 (피드백 전송용)
   }),
   clearConversation: () => set({ conversation: [], jdText: '', profileData: null }),
+
+  setIsCodeReviewMode: (mode) => set({ isCodeReviewMode: mode }),
+  setSelectedRepo: (repo) => set({ selectedRepo: repo }),
+  setRecommendedRepos: (repos) => set({ recommendedRepos: repos }),
+  setAllRepos: (repos) => set({ allRepos: repos }),
 }));
 
 // ============ Interview History Store ============

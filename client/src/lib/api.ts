@@ -289,6 +289,18 @@ export interface JDScrapedResponse {
 
 export const interviewAPI = {
   /**
+   * Prepare Code Review by fetching and scoring GitHub repos
+   */
+  async prepareCodeReview(githubUrl: string, jdText: string): Promise<PrepareCodeReviewResponse> {
+    const response = await fetch(`${API_BASE_URL}/interview/prepare-code-review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ github_url: githubUrl, jd_text: jdText }),
+      ...fetchOptions,
+    });
+    return handleResponse<PrepareCodeReviewResponse>(response);
+  },
+  /**
    * Health check
    */
   async healthCheck(): Promise<{ module: string; status: string }> {
@@ -302,7 +314,8 @@ export const interviewAPI = {
     profile: ProfileStructured,
     jdText: string,
     persona: 'professional' | 'friendly' | 'challenging' = 'professional',
-    maxQuestions: number = 5
+    maxQuestions: number = 5,
+    selectedRepo?: string
   ): Promise<InterviewSession> {
     const response = await fetch(`${API_BASE_URL}/interview/start`, {
       method: 'POST',
@@ -312,6 +325,7 @@ export const interviewAPI = {
         jd_text: jdText,
         persona,
         max_questions: maxQuestions,
+        selected_repo: selectedRepo,
       }),
       ...fetchOptions,
     });
@@ -360,12 +374,30 @@ export const interviewAPI = {
   },
 };
 
+export interface PrepareCodeReviewResponse {
+  recommended_repos: Array<{
+    name: string;
+    full_name: string;
+    language?: string;
+    stars: number;
+    score: number;
+    reason: string;
+  }>;
+  all_repos: Array<{
+    name: string;
+    full_name: string;
+    language?: string;
+    stars: number;
+  }>;
+}
+
 export interface InterviewSession {
   session_id: string;
   question: string;
   question_number: number;
   total_questions: number;
   persona: string;
+  github_brief?: string;
 }
 
 export interface InterviewResponse {

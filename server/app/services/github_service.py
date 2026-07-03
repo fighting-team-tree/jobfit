@@ -311,6 +311,160 @@ class GitHubService:
             parsed["username"], include_languages=include_languages
         )
 
+    async def get_repo_tree(self, owner: str, repo: str, branch: str = "main") -> list[dict]:
+        """Git Tree API로 리포지토리의 전체 파일 목록을 가져옵니다."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+                headers=self.headers,
+            )
+            if resp.status_code != 200:
+                return []
+            tree = resp.json().get("tree", [])
+            return [item for item in tree if item.get("type") == "blob"]
+
+    async def get_file_content(self, owner: str, repo: str, file_path: str) -> str | None:
+        """단일 파일의 raw 텍스트 내용을 가져옵니다."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/repos/{owner}/{repo}/contents/{file_path}",
+                headers={**self.headers, "Accept": "application/vnd.github.raw+json"},
+            )
+            if resp.status_code == 200:
+                return resp.text
+            return None
+
+    async def get_key_source_files(
+        self,
+        owner: str,
+        repo: str,
+        branch: str = "main",
+        max_files: int = 5,
+        max_total_chars: int = 8000,
+    ) -> list[dict]:
+        """휴리스틱 스코어링을 통해 핵심 소스 파일들의 내용을 가져옵니다."""
+        tree = await self.get_repo_tree(owner, repo, branch)
+        if not tree:
+            return []
+
+        # 스코어링 로직
+        scored_files = []
+        for item in tree:
+            path = item.get("path", "")
+            size = item.get("size", 0)
+
+            # 제외 필터
+            if size > 100000 or size == 0:  # 100KB 초과 무시
+                continue
+            if any(
+                x in path for x in ["node_modules/", "__pycache__/", ".git/", "dist/", "build/"]
+            ):
+                continue
+            if any(
+                path.endswith(ext)
+                for ext in [".lock", ".min.js", ".map", ".svg", ".png", ".jpg", ".jpeg"]
+            ):
+                continue
+
+            score = 0
+            path_lower = path.lower()
+
+            # 1. 진입점 (main.py, app.py, index.ts, server.ts 등)
+            if any(
+                path_lower.endswith(x)
+                for x in ["main.py", "app.py", "index.ts", "index.js", "server.ts", "server.js"]
+            ):
+                score += 40
+            # 2. 핵심 로직
+            elif any(
+                x in path_lower for x in ["services/", "controllers/", "hooks/", "utils/", "api/"]
+            ):
+                score += 30
+            # 3. 모델/스키마
+            elif any(x in path_lower for x in ["models/", "schemas/", "types/"]):
+                score += 25
+            # 4. 설정 파일
+            elif any(x in path_lower for x in ["config", "settings"]):
+                score += 20
+            # 5. 소스 코드 여부 (일반)
+            elif any(
+                path_lower.endswith(ext)
+                for ext in [".py", ".ts", ".tsx", ".js", ".jsx", ".java", ".go", ".rs"]
+            ):
+                score += 15
+
+            if score > 0:
+                scored_files.append({"path": path, "size": size, "score": score})
+
+        # 스코어 순 정렬 후 상위 파일 선택
+        scored_files.sort(key=lambda x: x["score"], reverse=True)
+        top_files = scored_files[:max_files]
+
+        results = []
+        total_chars = 0
+
+        for f in top_files:
+            content = await self.get_file_content(owner, repo, f["path"])
+            if content:
+                # 글자 수 제한 체크
+                if total_chars + len(content) > max_total_chars:
+                    # 일부만 잘라서 추가하고 중단
+                    remaining = max_total_chars - total_chars
+                    if remaining > 500:
+                        results.append(
+                            {"path": f["path"], "content": content[:remaining] + "...(truncated)"}
+                        )
+                    break
+
+                results.append({"path": f["path"], "content": content})
+                total_chars += len(content)
+
+        return results
+
+    async def recommend_repos_for_review(
+        self, jd_text: str, repos_analyzed: list[dict]
+    ) -> list[dict]:
+        """분석된 레포 목록에서 JD와의 기술 매칭도를 기반으로 상위 3개를 추천합니다."""
+        if not repos_analyzed:
+            return []
+
+        jd_lower = jd_text.lower() if jd_text else ""
+        recommendations = []
+
+        for repo in repos_analyzed:
+            score = 0
+            reasons = []
+
+            repo_lang = (repo.get("language") or "").lower()
+            stars = repo.get("stars", 0)
+
+            # 1. 언어 매칭
+            if repo_lang and repo_lang in jd_lower:
+                score += 40
+                reasons.append(f"JD에 요구된 {repo.get('language')} 언어 사용")
+            elif repo_lang:
+                score += 10
+
+            # 2. Stars
+            if stars > 0:
+                score += min(stars * 2, 20)
+                reasons.append(f"Star {stars}개 보유")
+
+            recommendations.append(
+                {
+                    "name": repo.get("name"),
+                    "language": repo.get("language"),
+                    "stars": stars,
+                    "score": score,
+                    "reason": " / ".join(reasons)
+                    if reasons
+                    else "포트폴리오 평가에 적합한 프로젝트",
+                }
+            )
+
+        recommendations.sort(key=lambda x: x["score"], reverse=True)
+        return recommendations[:3]
+
 
 # 싱글톤 인스턴스
 github_service = GitHubService()

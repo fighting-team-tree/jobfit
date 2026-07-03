@@ -11,7 +11,9 @@ from contextlib import suppress
 from datetime import UTC, datetime
 
 from app.core.config import settings
+from app.services.code_review_service import code_review_service
 from app.services.elevenlabs_service import elevenlabs_service
+from app.services.github_service import github_service
 from app.services.in_memory_store import ExpiringStore
 from app.services.llm_service import llm_service
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -35,6 +37,8 @@ class InterviewSession(BaseModel):
     max_questions: int = 5
     started_at: str | None = None
     ended_at: str | None = None
+    selected_repo: str | None = None
+    github_brief: str | None = None
 
 
 class StartInterviewRequest(BaseModel):
@@ -44,6 +48,7 @@ class StartInterviewRequest(BaseModel):
     jd_text: str
     persona: str = "professional"
     max_questions: int = 5
+    selected_repo: str | None = None
 
 
 class InterviewFeedbackResponse(BaseModel):
@@ -73,6 +78,16 @@ class EndSessionRequest(BaseModel):
     profile: dict = Field(default_factory=dict)
     jd_text: str = ""
     persona: str = "professional"
+
+
+class PrepareCodeReviewRequest(BaseModel):
+    github_url: str
+    jd_text: str
+
+
+class PrepareCodeReviewResponse(BaseModel):
+    recommended_repos: list[dict]
+    all_repos: list[dict]
 
 
 # ============ In-memory session storage ============
@@ -163,6 +178,68 @@ def read_root():
     return {"module": "interview", "status": "healthy"}
 
 
+@router.post("/prepare-code-review", response_model=PrepareCodeReviewResponse)
+async def prepare_code_review(request: PrepareCodeReviewRequest):
+    """
+    지원자의 GitHub를 분석하여 코드 리뷰에 적합한 레포지토리를 추천합니다.
+    """
+    try:
+        analysis_result = await github_service.analyze_repository(
+            url=request.github_url, include_readme=False, include_languages=True
+        )
+
+        # 만약 단일 리포지토리 URL이었다면
+        if "repo" in analysis_result:
+            repo_name = analysis_result["repo"]
+            stars = analysis_result.get("stars", 0)
+            lang = (
+                max(analysis_result.get("languages", {"Unknown": 1}).items(), key=lambda x: x[1])[0]
+                if analysis_result.get("languages")
+                else "Unknown"
+            )
+
+            repo_info = {
+                "name": repo_name.split("/")[-1],
+                "full_name": repo_name,
+                "language": lang,
+                "stars": stars,
+            }
+            return PrepareCodeReviewResponse(
+                recommended_repos=[
+                    {
+                        "name": repo_info["name"],
+                        "full_name": repo_name,
+                        "language": lang,
+                        "stars": stars,
+                        "score": 100,
+                        "reason": "사용자가 직접 지정한 단일 리포지토리입니다.",
+                    }
+                ],
+                all_repos=[repo_info],
+            )
+
+        # 사용자 프로필 URL인 경우
+        repos_analyzed = analysis_result.get("repos_analyzed", [])
+
+        # full_name 포맷으로 통일 (owner/repo)
+        username = analysis_result.get("username", "")
+        for r in repos_analyzed:
+            r["full_name"] = f"{username}/{r['name']}"
+
+        recommended = await github_service.recommend_repos_for_review(
+            request.jd_text, repos_analyzed
+        )
+
+        # recommended에도 full_name 추가
+        for r in recommended:
+            r["full_name"] = f"{username}/{r['name']}"
+
+        return PrepareCodeReviewResponse(recommended_repos=recommended, all_repos=repos_analyzed)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitHub 분석 실패: {str(e)}") from e
+
+
 @router.post("/start")
 async def start_interview(request: StartInterviewRequest):
     """
@@ -181,7 +258,25 @@ async def start_interview(request: StartInterviewRequest):
         persona=request.persona,
         max_questions=request.max_questions,
         started_at=datetime.now().isoformat(),
+        selected_repo=request.selected_repo,
     )
+
+    github_brief_text = None
+    if request.selected_repo:
+        try:
+            owner, repo = (
+                request.selected_repo.split("/")[-2:]
+                if "/" in request.selected_repo
+                else (request.profile.get("github_id", ""), request.selected_repo)
+            )
+            source_files = await github_service.get_key_source_files(owner, repo)
+            brief = await code_review_service.generate_code_review_brief(
+                f"{owner}/{repo}", source_files, request.profile, request.jd_text
+            )
+            github_brief_text = brief.get("prompt_injection")
+            session.github_brief = github_brief_text
+        except Exception as e:
+            print(f"[Interview] Failed to generate code review brief: {e}")
 
     # Generate first question with fallback
     try:
@@ -190,6 +285,7 @@ async def start_interview(request: StartInterviewRequest):
             jd_text=request.jd_text,
             conversation_history=[],
             persona=request.persona,
+            github_brief=github_brief_text,
         )
     except Exception as e:
         print(f"[Interview] NVIDIA generation failed: {e}. Using fallback question.")
@@ -213,6 +309,7 @@ async def start_interview(request: StartInterviewRequest):
             "question_number": 1,
             "total_questions": request.max_questions,
             "persona": request.persona,
+            "github_brief": github_brief_text,
         }
 
     except Exception as e:
@@ -266,6 +363,7 @@ async def respond_to_question(
             jd_text=session.jd_text,
             conversation_history=session.conversation_history,
             persona=session.persona,
+            github_brief=session.github_brief,
         )
 
         session.conversation_history.append(
@@ -566,6 +664,7 @@ async def interview_websocket(websocket: WebSocket, session_id: str):
                 jd_text=session.jd_text,
                 conversation_history=session.conversation_history,
                 persona=session.persona,
+                github_brief=session.github_brief,
             )
 
             session.conversation_history.append(
