@@ -1,32 +1,20 @@
-# Python 환경 & 패키지 관리 규칙
+# Python Environment & Package Management Rules
 
-## 1. 패키지 관리자: `uv` (필수)
-- 모든 Python 패키지 관리는 반드시 **`uv`** 사용
-- `pip`, `poetry` 직접 사용 금지
-- **이유**: Rust 기반으로 빠르고 안정적인 의존성 해결
+## 1. Package Manager: `uv` (Strict)
+- All Python package management MUST be done using **`uv`**.
+- Do NOT use `pip` or `poetry` directly unless absolutely necessary.
+- **Why?** `uv` is significantly faster (written in Rust) and provides reliable dependency resolution.
 
-## 2. 설정 파일: `pyproject.toml`
-- 의존성은 `pyproject.toml`에 정의
-- `requirements.txt`는 배포용으로만 생성
+## 2. Configuration File: `pyproject.toml`
+- Dependencies must be defined in `pyproject.toml`.
+- Do NOT use `requirements.txt` for defining primary dependencies (uv can generate it if needed for deployment).
 
-## 3. 주요 명령어
-```bash
-# 의존성 추가
-uv add <package_name>
+## 3. Workflow
+- **Add Dependency:** `uv add <package_name>`
+- **Remove Dependency:** `uv remove <package_name>`
+- **Sync Environment:** `uv sync`
+- **Run Scripts:** `uv run python server/main.py`
 
-# 의존성 제거
-uv remove <package_name>
-
-# 환경 동기화
-uv sync
-
-# 스크립트 실행
-uv run python server/main.py
-
-# 서버 시작
-cd server && uv run uvicorn main:app --reload --port 8000
-```
-
-## 4. 가상환경
-- `uv`가 `.venv`에서 자동 관리
-- `.venv`는 `.gitignore`에 포함
+## 4. Virtual Environment
+- `uv` automatically manages the virtual environment in `.venv`.
+- Ensure `.venv` is in `.gitignore`.

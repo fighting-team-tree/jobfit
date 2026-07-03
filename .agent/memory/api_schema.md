@@ -9,6 +9,7 @@
 - `GET /auth/me`: 현재 인증 상태 확인
 - `GET /auth/login/google`: Google OAuth 로그인 시작
 - `GET /auth/callback/google`: Google OAuth callback 처리 및 JWT 발급
+- `POST /auth/test-login`: 테스트용 간편 로그인 및 임시 토큰 발급
 
 ## Analysis API (`/analyze`)
 - `GET /analyze/`: 분석 모듈 health check
@@ -41,6 +42,7 @@
 
 ## Interview API (`/interview`)
 - `GET /interview/`: 면접 모듈 health check
+- `POST /interview/prepare-code-review`: 코드 리뷰 면접을 위한 저장소 JD 적합도 및 소스 분석 요약 생성
 - `POST /interview/start`: REST 기반 면접 세션 생성 및 첫 질문 반환
 - `POST /interview/{session_id}/respond`: 답변 제출 및 다음 질문 생성
 - `GET /interview/{session_id}/feedback`: 세션 대화 기반 피드백 반환

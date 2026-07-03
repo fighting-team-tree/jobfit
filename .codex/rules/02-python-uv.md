@@ -1,27 +1,20 @@
 # Python Environment & Package Management Rules
 
-## 필수 규칙
+## 1. Package Manager: `uv` (Strict)
+- All Python package management MUST be done using **`uv`**.
+- Do NOT use `pip` or `poetry` directly unless absolutely necessary.
+- **Why?** `uv` is significantly faster (written in Rust) and provides reliable dependency resolution.
 
-- Python 패키지 관리는 반드시 `uv`를 사용합니다.
-- `pip`, `poetry`를 직접 사용하지 않습니다.
-- 의존성은 `pyproject.toml`과 `uv.lock`으로 관리합니다.
+## 2. Configuration File: `pyproject.toml`
+- Dependencies must be defined in `pyproject.toml`.
+- Do NOT use `requirements.txt` for defining primary dependencies (uv can generate it if needed for deployment).
 
-## 명령어
+## 3. Workflow
+- **Add Dependency:** `uv add <package_name>`
+- **Remove Dependency:** `uv remove <package_name>`
+- **Sync Environment:** `uv sync`
+- **Run Scripts:** `uv run python server/main.py`
 
-```bash
-uv sync
-uv add <package>
-uv remove <package>
-uv run python <script.py>
-uv run pytest
-uv run ruff check server/ tests/
-uv run ruff format server/ tests/
-```
-
-## 서버 실행
-
-```bash
-cd server && uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-주의: 이 프로젝트의 FastAPI 엔트리포인트는 `server/main.py`이므로 `app.main:app`이 아니라 `main:app`을 사용합니다.
+## 4. Virtual Environment
+- `uv` automatically manages the virtual environment in `.venv`.
+- Ensure `.venv` is in `.gitignore`.

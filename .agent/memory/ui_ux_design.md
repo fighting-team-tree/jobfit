@@ -11,7 +11,8 @@
    - Radar Chart: 나의 역량 vs JD 요구 역량 비교.
    - Insight Card: 핵심 부족 역량 및 맹점 리포트.
 4. **Simulation (Action):**
-   - "약점 보완 면접 시작하기" -> ElevenLabs 가상 면접관 등장 -> 실전 압박 면접.
+   - "약점 보완 면접 시작하기" 또는 **"GitHub 코드 리뷰 면접 시작하기"** 선택.
+   - ElevenLabs 가상 면접관 등장 -> 실전 압박 및 실제 소스 코드 기반 기술 면접.
 5. **Feedback & Plan:**
    - 면접 종료 후 피드백 리포트 -> 부족한 부분 학습 일정을 Google Calendar에 등록.
 
@@ -19,6 +20,10 @@
 
 ### 화면 1: 면접 대기실 (Pre-Interview Setup)
 - **Layout:** 중앙 마이크/스피커 테스트. 우측 "오늘의 면접관 페르소나" 카드.
+- **Code Review Mode Interface:**
+  - **Code Review Mode Toggle:** 코드 리뷰 면접을 활성화하기 위한 토글 스위치.
+  - **Repository Selector:** JD 매칭도 기반으로 산출된 AI 추천 저장소 리스트 및 사용자의 GitHub 전체 저장소 수동 선택/입력 UI.
+  - **Code Brief Card:** 선택된 저장소의 소스 트리 분석 상태와 코드 요약 정보(핵심 파일 및 아키텍처 요약)를 미팅 전에 시각적으로 제시.
 - **Feature:** JD에 따라 면접관 성향 동적 변화 (ElevenLabs Voice Lab).
 - **Interaction:** "준비 완료" -> 화면 어두워지며 면접관 아바타 전환.
 
@@ -26,6 +31,7 @@
 - **Visual:** ElevenLabs 오디오 파형 반응 (Lip-sync 대용). 
   - User Speaking: 'Listening...'
   - AI Speaking: 'Speaking...'
+- **Context Injection:** 일반 면접 시에는 JD/이력서 기반, 코드 리뷰 모드 시에는 사전에 요약된 Code Brief 컨텍스트를 면접관 시스템 프롬프트(overrides)에 주입하여 코드 기반 꼬리물기 질문 유도.
 - **Control:** 일시정지, 질문 다시 듣기, 종료 버튼.
 - **UX Detail:** 침묵 감지 시 "생각할 시간을 드릴까요?" 툴 트리거.
 
@@ -34,3 +40,4 @@
 - **Integrations:** 
   - "GitHub Issue 생성하기" 버튼.
   - "캘린더 등록하기" 버튼.
+
